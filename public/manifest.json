@@ -1,0 +1,21 @@
+{
+  "name": "7K Skills",
+  "short_name": "7K Skills",
+  "description": "A minimalistic habit stacking app for overstimulated minds.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#f5f5f5",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/7kskills/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/7kskills/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
