@@ -7,6 +7,7 @@ import {
   Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
   Smartphone, Trash2
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const ICONS: Record<string, ElementType> = {
   Sunrise, Sun, Smile, Droplets, Brain, Dumbbell, BookOpen, Gamepad2,
@@ -70,6 +71,7 @@ const THEMES = {
   dark: { bg: 'bg-[#121212]', text: 'text-[#e5e5e5]', card: 'bg-[#1e1e1e]', border: 'border-white/10', accent: 'bg-white', accentText: 'text-black' },
   midnight: { bg: 'bg-[#0f172a]', text: 'text-[#e2e8f0]', card: 'bg-[#1e293b]', border: 'border-white/10', accent: 'bg-[#38bdf8]', accentText: 'text-[#0f172a]' },
   forest: { bg: 'bg-[#1a2e1a]', text: 'text-[#e2e8f0]', card: 'bg-[#2a402a]', border: 'border-white/10', accent: 'bg-[#4ade80]', accentText: 'text-[#1a2e1a]' },
+  timberwolf: { bg: 'bg-[#d6d3d1]', text: 'text-[#44403c]', card: 'bg-[#e7e5e4]', border: 'border-[#a8a29e]', accent: 'bg-[#57534e]', accentText: 'text-[#f5f5f4]' },
 };
 
 type ThemeKey = keyof typeof THEMES;
@@ -446,6 +448,65 @@ export default function App() {
     );
   };
 
+  const renderHistoryCharts = () => {
+    // Prepare data for the last 7 days
+    const last7Days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      last7Days.push({
+        name: dayName,
+        completed: data.history[dateStr]?.length || 0,
+        date: dateStr
+      });
+    }
+
+    return (
+      <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm mb-6`}>
+        <h3 className={`text-sm font-semibold uppercase tracking-widest opacity-50 mb-6 ${theme.text}`}>Weekly Trends</h3>
+        <div className="h-48 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={last7Days}>
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.5 }} 
+                dy={10}
+              />
+              <Tooltip 
+                cursor={{ fill: 'transparent' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className={`${theme.accent} ${theme.accentText} text-xs p-2 rounded-lg shadow-xl`}>
+                        <p className="font-bold">{payload[0].payload.name}</p>
+                        <p>{payload[0].value} Habits</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar dataKey="completed" radius={[4, 4, 4, 4]}>
+                {last7Days.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.date === getTodayStr() ? (data.theme === 'midnight' ? '#38bdf8' : data.theme === 'forest' ? '#4ade80' : '#000000') : 'currentColor'} 
+                    className={entry.date === getTodayStr() ? '' : 'opacity-30'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`min-h-screen ${theme.bg} ${theme.text} font-sans pb-24 selection:${theme.accent} selection:${theme.accentText} transition-colors duration-300`}>
       {/* Header */}
@@ -608,6 +669,7 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
+              {renderHistoryCharts()}
               {renderCalendar()}
 
               <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
