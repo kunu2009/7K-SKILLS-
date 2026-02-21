@@ -63,6 +63,7 @@ const INITIAL_STACKS: Stack[] = [
 const BADGES = [
   { id: 'first_step', title: 'First Step', description: 'Complete your first habit', iconName: 'Footprints' },
   { id: 'perfect_day', title: 'Perfect Day', description: 'Complete all habits in a day', iconName: 'Star' },
+  { id: 'daily_streak', title: 'Daily Streak', description: 'Complete all habits for the day', iconName: 'Trophy' },
   { id: 'streak_3', title: '3 Day Streak', description: 'Maintain a 3-day streak', iconName: 'Flame' },
   { id: 'streak_7', title: '7 Day Streak', description: 'Maintain a 7-day streak', iconName: 'Zap' },
 ];
@@ -93,7 +94,7 @@ const formatTimeDisplay = (time24: string) => {
 type AppData = {
   stacks: Stack[];
   history: Record<string, string[]>; // date -> array of completed habit ids
-  journal: Record<string, string>; // date -> journal entry
+  journal: Record<string, { text: string; mood: string; highlights: string[] }>; // date -> journal entry
   points: number;
   badges: string[];
   lastDate: string;
@@ -122,6 +123,13 @@ export default function App() {
         }
         // Migrations
         if (!parsed.journal) parsed.journal = {};
+        // Migrate old string journal to object
+        Object.keys(parsed.journal).forEach(date => {
+          if (typeof parsed.journal[date] === 'string') {
+            // @ts-ignore
+            parsed.journal[date] = { text: parsed.journal[date], mood: 'neutral', highlights: [] };
+          }
+        });
         if (!parsed.theme) parsed.theme = 'light';
         if (!parsed.journalTime) parsed.journalTime = "20:00";
         return parsed;
@@ -319,6 +327,7 @@ export default function App() {
       const totalHabits = newStacks.reduce((acc, s) => acc + s.habits.length, 0);
       if (completedToday.length === totalHabits && totalHabits > 0) {
         newBadges.add('perfect_day');
+        newBadges.add('daily_streak');
         newPoints += 50;
       }
 
@@ -396,11 +405,14 @@ export default function App() {
     setNewHabitRepeatDays([0, 1, 2, 3, 4, 5, 6]);
   };
 
-  const updateJournal = (date: string, text: string) => {
-    setData(prev => ({
-      ...prev,
-      journal: { ...prev.journal, [date]: text }
-    }));
+  const updateJournal = (date: string, field: 'text' | 'mood' | 'highlights', value: any) => {
+    setData(prev => {
+      const entry = prev.journal[date] || { text: '', mood: 'neutral', highlights: [] };
+      return {
+        ...prev,
+        journal: { ...prev.journal, [date]: { ...entry, [field]: value } }
+      };
+    });
   };
 
   const todayDayOfWeek = new Date().getDay();
@@ -985,12 +997,70 @@ export default function App() {
                       <Bell className="w-3.5 h-3.5 opacity-40" />
                     </button>
                   </div>
+                  
+                  {/* Mood Selector */}
+                  <div className="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
+                    {['happy', 'neutral', 'sad', 'stressed', 'energetic', 'tired'].map(mood => (
+                      <button
+                        key={mood}
+                        onClick={() => updateJournal(selectedDate, 'mood', mood)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-all ${
+                          (data.journal[selectedDate]?.mood || 'neutral') === mood
+                            ? `${theme.accent} ${theme.accentText}`
+                            : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`
+                        }`}
+                      >
+                        {mood}
+                      </button>
+                    ))}
+                  </div>
+
                   <textarea
-                    value={data.journal[selectedDate] || ''}
-                    onChange={(e) => updateJournal(selectedDate, e.target.value)}
-                    placeholder="Write your thoughts here..."
-                    className={`w-full h-32 p-4 rounded-xl outline-none resize-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                    value={data.journal[selectedDate]?.text || ''}
+                    onChange={(e) => updateJournal(selectedDate, 'text', e.target.value)}
+                    placeholder="Write about your day..."
+                    className={`w-full h-32 p-4 rounded-xl outline-none resize-none focus:ring-2 mb-4 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
                   />
+
+                  {/* Highlights */}
+                  <div>
+                    <h5 className="text-[10px] font-bold uppercase opacity-40 mb-2">Highlights (Things I Liked)</h5>
+                    <div className="space-y-2">
+                      {(data.journal[selectedDate]?.highlights || []).map((highlight, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${theme.accent}`} />
+                          <input
+                            type="text"
+                            value={highlight}
+                            onChange={(e) => {
+                              const newHighlights = [...(data.journal[selectedDate]?.highlights || [])];
+                              newHighlights[idx] = e.target.value;
+                              updateJournal(selectedDate, 'highlights', newHighlights);
+                            }}
+                            className={`w-full bg-transparent outline-none text-sm border-b ${theme.border} pb-1 focus:border-opacity-100`}
+                          />
+                          <button 
+                            onClick={() => {
+                              const newHighlights = (data.journal[selectedDate]?.highlights || []).filter((_, i) => i !== idx);
+                              updateJournal(selectedDate, 'highlights', newHighlights);
+                            }}
+                            className="opacity-20 hover:opacity-100"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const newHighlights = [...(data.journal[selectedDate]?.highlights || []), ''];
+                          updateJournal(selectedDate, 'highlights', newHighlights);
+                        }}
+                        className={`text-xs font-medium opacity-50 hover:opacity-100 flex items-center gap-1 mt-2`}
+                      >
+                        <Plus className="w-3 h-3" /> Add Highlight
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
