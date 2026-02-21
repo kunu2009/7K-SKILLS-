@@ -4,7 +4,7 @@ import {
   Sun, Droplets, Dumbbell, BookOpen, Brain, Smile, Gamepad2, 
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
-  Clock, X, Timer
+  Clock, X, Timer, Download, ChevronRight
 } from 'lucide-react';
 
 const ICONS: Record<string, ElementType> = {
@@ -135,9 +135,35 @@ export default function App() {
   // Sleep Countdown State
   const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
 
+  // PWA Install Prompt State
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  // Selected Date for History View
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
   useEffect(() => {
     localStorage.setItem('7k-skills-v3', JSON.stringify(data));
   }, [data]);
+
+  // Handle PWA Install Prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+    });
+  };
 
   // Request Notification Permission
   useEffect(() => {
@@ -146,10 +172,24 @@ export default function App() {
     }
   }, []);
 
-  // Reminder Check & Sleep Countdown
+  // Real-time Date Check & Reminder Check & Sleep Countdown
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
+      const todayStr = getTodayStr();
+
+      // Check for day change
+      if (data.lastDate !== todayStr) {
+        setData(prev => ({
+          ...prev,
+          stacks: prev.stacks.map(s => ({
+            ...s,
+            habits: s.habits.map(h => ({ ...h, completed: false }))
+          })),
+          lastDate: todayStr
+        }));
+      }
+
       const currentHours = String(now.getHours()).padStart(2, '0');
       const currentMinutes = String(now.getMinutes()).padStart(2, '0');
       const currentTime = `${currentHours}:${currentMinutes}`;
@@ -159,7 +199,7 @@ export default function App() {
         data.stacks.forEach(stack => {
           stack.habits.forEach(habit => {
             if (!habit.completed && habit.time === currentTime) {
-              const notifiedKey = `notified-${getTodayStr()}-${habit.id}`;
+              const notifiedKey = `notified-${todayStr}-${habit.id}`;
               if (!localStorage.getItem(notifiedKey)) {
                 new Notification("7K Skills", {
                   body: `Time for: ${habit.title}`,
@@ -191,7 +231,7 @@ export default function App() {
     }, 1000); // Check every second for smoother countdown
 
     return () => clearInterval(interval);
-  }, [data.stacks, data.sleepTime]);
+  }, [data.stacks, data.sleepTime, data.lastDate]);
 
   const calculateStreak = (history: Record<string, string[]>) => {
     let streak = 0;
@@ -364,9 +404,10 @@ export default function App() {
       if (completedCount >= totalHabits && totalHabits > 0) intensityClass = "bg-black";
 
       days.push(
-        <div 
+        <button 
           key={dateStr} 
-          className={`aspect-square rounded-md ${intensityClass} transition-all`}
+          onClick={() => setSelectedDate(dateStr)}
+          className={`aspect-square rounded-md ${intensityClass} transition-all hover:ring-2 hover:ring-black/20 focus:outline-none focus:ring-2 focus:ring-black`}
           title={`${dateStr}: ${completedCount} completed`}
         />
       );
@@ -441,8 +482,20 @@ export default function App() {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">7K Skills</h1>
+            <p className="text-[10px] font-medium text-black/40 uppercase tracking-widest mt-0.5">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </p>
           </div>
           <div className="flex items-center gap-4">
+            {installPrompt && (
+              <button 
+                onClick={handleInstallClick}
+                className="bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-black/80 transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                Install
+              </button>
+            )}
             <div className="flex items-center gap-1.5 bg-black/5 px-3 py-1.5 rounded-full">
               <Flame className={`w-4 h-4 ${currentStreak > 0 ? 'text-orange-500' : 'text-black/30'}`} />
               <span className="font-semibold text-sm">{currentStreak}</span>
@@ -743,6 +796,45 @@ export default function App() {
                 >
                   Add Habit
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* History Detail Modal */}
+      <AnimatePresence>
+        {selectedDate && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold">
+                  {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                </h3>
+                <button onClick={() => setSelectedDate(null)} className="p-2 hover:bg-black/5 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                {data.history[selectedDate]?.length ? (
+                  data.stacks.flatMap(s => s.habits).filter(h => data.history[selectedDate].includes(h.id)).map(habit => {
+                    const Icon = ICONS[habit.iconName] || Circle;
+                    return (
+                      <div key={habit.id} className="flex items-center gap-3 p-3 bg-black/5 rounded-xl">
+                        <Icon className="w-5 h-5 text-black/60" />
+                        <span className="font-medium">{habit.title}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-center text-black/40 py-4">No habits completed this day.</p>
+                )}
               </div>
             </motion.div>
           </div>
