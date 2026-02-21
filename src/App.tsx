@@ -4,7 +4,8 @@ import {
   Sun, Droplets, Dumbbell, BookOpen, Brain, Smile, Gamepad2, 
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
-  Clock, X, Timer, Download, ChevronRight
+  Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
+  Smartphone, Trash2
 } from 'lucide-react';
 
 const ICONS: Record<string, ElementType> = {
@@ -64,6 +65,15 @@ const BADGES = [
   { id: 'streak_7', title: '7 Day Streak', description: 'Maintain a 7-day streak', iconName: 'Zap' },
 ];
 
+const THEMES = {
+  light: { bg: 'bg-[#f5f5f5]', text: 'text-[#1a1a1a]', card: 'bg-white', border: 'border-black/5', accent: 'bg-black', accentText: 'text-white' },
+  dark: { bg: 'bg-[#121212]', text: 'text-[#e5e5e5]', card: 'bg-[#1e1e1e]', border: 'border-white/10', accent: 'bg-white', accentText: 'text-black' },
+  midnight: { bg: 'bg-[#0f172a]', text: 'text-[#e2e8f0]', card: 'bg-[#1e293b]', border: 'border-white/10', accent: 'bg-[#38bdf8]', accentText: 'text-[#0f172a]' },
+  forest: { bg: 'bg-[#1a2e1a]', text: 'text-[#e2e8f0]', card: 'bg-[#2a402a]', border: 'border-white/10', accent: 'bg-[#4ade80]', accentText: 'text-[#1a2e1a]' },
+};
+
+type ThemeKey = keyof typeof THEMES;
+
 const getTodayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -80,22 +90,23 @@ const formatTimeDisplay = (time24: string) => {
 type AppData = {
   stacks: Stack[];
   history: Record<string, string[]>; // date -> array of completed habit ids
+  journal: Record<string, string>; // date -> journal entry
   points: number;
   badges: string[];
   lastDate: string;
-  sleepTime: string; // "22:00"
+  sleepTime: string;
+  theme: ThemeKey;
 };
 
 export default function App() {
   const [data, setData] = useState<AppData>(() => {
-    const saved = localStorage.getItem('7k-skills-v3');
+    const saved = localStorage.getItem('7k-skills-v4');
     const today = getTodayStr();
     
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as AppData;
         if (parsed.lastDate !== today) {
-          // New day reset
           return {
             ...parsed,
             stacks: parsed.stacks.map(s => ({
@@ -105,8 +116,9 @@ export default function App() {
             lastDate: today
           };
         }
-        // Ensure sleepTime exists for older versions
-        if (!parsed.sleepTime) parsed.sleepTime = "22:00";
+        // Migrations
+        if (!parsed.journal) parsed.journal = {};
+        if (!parsed.theme) parsed.theme = 'light';
         return parsed;
       } catch (e) {
         // fallback
@@ -116,14 +128,16 @@ export default function App() {
     return {
       stacks: INITIAL_STACKS,
       history: {},
+      journal: {},
       points: 0,
       badges: [],
       lastDate: today,
-      sleepTime: "22:00"
+      sleepTime: "22:00",
+      theme: 'light'
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'today' | 'progress' | 'focus'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'settings'>('today');
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
   
   // New Habit State
@@ -141,8 +155,10 @@ export default function App() {
   // Selected Date for History View
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  const theme = THEMES[data.theme];
+
   useEffect(() => {
-    localStorage.setItem('7k-skills-v3', JSON.stringify(data));
+    localStorage.setItem('7k-skills-v4', JSON.stringify(data));
   }, [data]);
 
   // Handle PWA Install Prompt
@@ -218,7 +234,6 @@ export default function App() {
       sleepDate.setHours(sleepH, sleepM, 0, 0);
       
       if (now > sleepDate) {
-        // If passed sleep time, count down to tomorrow's sleep time
         sleepDate.setDate(sleepDate.getDate() + 1);
       }
       
@@ -228,7 +243,7 @@ export default function App() {
       
       setTimeLeftToSleep(`${hoursLeft}h ${minutesLeft}m`);
 
-    }, 1000); // Check every second for smoother countdown
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [data.stacks, data.sleepTime, data.lastDate]);
@@ -236,8 +251,6 @@ export default function App() {
   const calculateStreak = (history: Record<string, string[]>) => {
     let streak = 0;
     let d = new Date();
-    
-    // Check if today has any completions, if not, start checking from yesterday
     const todayStr = getTodayStr();
     if (!history[todayStr] || history[todayStr].length === 0) {
       d.setDate(d.getDate() - 1);
@@ -281,18 +294,15 @@ export default function App() {
         };
       });
 
-      // Update history
       const completedToday = newStacks.flatMap(s => s.habits).filter(h => h.completed).map(h => h.id);
       const newHistory = { ...prev.history, [today]: completedToday };
 
-      // Check perfect day
       const totalHabits = newStacks.reduce((acc, s) => acc + s.habits.length, 0);
       if (completedToday.length === totalHabits && totalHabits > 0) {
         newBadges.add('perfect_day');
-        newPoints += 50; // Bonus
+        newPoints += 50;
       }
 
-      // Check streaks
       const currentStreak = calculateStreak(newHistory);
       if (currentStreak >= 3) newBadges.add('streak_3');
       if (currentStreak >= 7) newBadges.add('streak_7');
@@ -365,6 +375,13 @@ export default function App() {
     setNewHabitTime('12:00');
   };
 
+  const updateJournal = (date: string, text: string) => {
+    setData(prev => ({
+      ...prev,
+      journal: { ...prev.journal, [date]: text }
+    }));
+  };
+
   const totalHabits = data.stacks.reduce((acc, stack) => acc + stack.habits.length, 0);
   const completedHabits = data.stacks.reduce((acc, stack) => acc + stack.habits.filter(h => h.completed).length, 0);
   const progress = totalHabits === 0 ? 0 : Math.round((completedHabits / totalHabits) * 100);
@@ -374,19 +391,16 @@ export default function App() {
     const days = [];
     const today = new Date();
     
-    // Day labels
     const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-      <div key={`label-${i}`} className="text-center text-[10px] font-bold text-black/30 mb-1">
+      <div key={`label-${i}`} className={`text-center text-[10px] font-bold opacity-30 mb-1 ${theme.text}`}>
         {day}
       </div>
     ));
 
-    // Calculate start date to align with Sunday
     const startDay = new Date(today);
     startDay.setDate(today.getDate() - 27);
     const startDayOfWeek = startDay.getDay();
     
-    // Add empty slots for alignment
     for (let i = 0; i < startDayOfWeek; i++) {
       days.push(<div key={`empty-${i}`} className="aspect-square" />);
     }
@@ -397,25 +411,33 @@ export default function App() {
       const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       
       const completedCount = data.history[dateStr]?.length || 0;
-      let intensityClass = "bg-black/5";
-      if (completedCount > 0) intensityClass = "bg-black/20";
-      if (completedCount > 3) intensityClass = "bg-black/40";
-      if (completedCount > 6) intensityClass = "bg-black/70";
-      if (completedCount >= totalHabits && totalHabits > 0) intensityClass = "bg-black";
+      const hasJournal = !!data.journal[dateStr];
+      
+      let intensityClass = data.theme === 'light' ? "bg-black/5" : "bg-white/5";
+      if (completedCount > 0) intensityClass = data.theme === 'light' ? "bg-black/20" : "bg-white/20";
+      if (completedCount > 3) intensityClass = data.theme === 'light' ? "bg-black/40" : "bg-white/40";
+      if (completedCount > 6) intensityClass = data.theme === 'light' ? "bg-black/70" : "bg-white/70";
+      if (completedCount >= totalHabits && totalHabits > 0) intensityClass = data.theme === 'light' ? "bg-black" : "bg-white";
 
       days.push(
         <button 
           key={dateStr} 
           onClick={() => setSelectedDate(dateStr)}
-          className={`aspect-square rounded-md ${intensityClass} transition-all hover:ring-2 hover:ring-black/20 focus:outline-none focus:ring-2 focus:ring-black`}
+          className={`aspect-square rounded-md ${intensityClass} transition-all relative
+            ${data.theme === 'light' ? 'hover:ring-black/20 focus:ring-black' : 'hover:ring-white/20 focus:ring-white'} 
+            hover:ring-2 focus:outline-none focus:ring-2`}
           title={`${dateStr}: ${completedCount} completed`}
-        />
+        >
+          {hasJournal && (
+            <div className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${data.theme === 'light' ? 'bg-red-500' : 'bg-yellow-400'}`} />
+          )}
+        </button>
       );
     }
 
     return (
-      <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-4">Activity (Last 28 Days)</h3>
+      <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+        <h3 className={`text-sm font-semibold uppercase tracking-widest opacity-50 mb-4 ${theme.text}`}>History & Journal</h3>
         <div className="grid grid-cols-7 gap-x-2 gap-y-1">
           {dayLabels}
           {days}
@@ -424,83 +446,23 @@ export default function App() {
     );
   };
 
-  const renderSkillProgress = () => {
-    // Calculate completion rate for each skill over the last 28 days
-    const today = new Date();
-    const last28Days: string[] = [];
-    for (let i = 27; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      last28Days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-    }
-
-    const allHabits = data.stacks.flatMap(s => s.habits);
-    
-    return (
-      <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-4">Skill Consistency</h3>
-        <div className="space-y-4">
-          {allHabits.map(habit => {
-            let completedDays = 0;
-            last28Days.forEach(dateStr => {
-              if (data.history[dateStr]?.includes(habit.id)) {
-                completedDays++;
-              }
-            });
-            const percentage = Math.round((completedDays / 28) * 100);
-            const Icon = ICONS[habit.iconName] || Circle;
-
-            return (
-              <div key={habit.id} className="space-y-1.5">
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-black/40" />
-                    <span className="font-medium">{habit.title}</span>
-                  </div>
-                  <span className="text-black/50 font-semibold text-xs">{percentage}%</span>
-                </div>
-                <div className="h-1.5 bg-black/5 rounded-full overflow-hidden">
-                  <motion.div 
-                    className="h-full bg-black"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percentage}%` }}
-                    transition={{ type: "spring", stiffness: 50, damping: 15 }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-[#1a1a1a] font-sans pb-24 selection:bg-black selection:text-white">
+    <div className={`min-h-screen ${theme.bg} ${theme.text} font-sans pb-24 selection:${theme.accent} selection:${theme.accentText} transition-colors duration-300`}>
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-[#f5f5f5]/80 backdrop-blur-md border-b border-black/5 px-6 py-4">
+      <header className={`sticky top-0 z-10 ${theme.bg}/80 backdrop-blur-md border-b ${theme.border} px-6 py-4`}>
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">7K Skills</h1>
-            <p className="text-[10px] font-medium text-black/40 uppercase tracking-widest mt-0.5">
+            <p className="text-[10px] font-medium opacity-40 uppercase tracking-widest mt-0.5">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {installPrompt && (
-              <button 
-                onClick={handleInstallClick}
-                className="bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-black/80 transition-colors"
-              >
-                <Download className="w-3 h-3" />
-                Install
-              </button>
-            )}
-            <div className="flex items-center gap-1.5 bg-black/5 px-3 py-1.5 rounded-full">
-              <Flame className={`w-4 h-4 ${currentStreak > 0 ? 'text-orange-500' : 'text-black/30'}`} />
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
+              <Flame className={`w-4 h-4 ${currentStreak > 0 ? 'text-orange-500' : 'opacity-30'}`} />
               <span className="font-semibold text-sm">{currentStreak}</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-black/5 px-3 py-1.5 rounded-full">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
               <Star className="w-4 h-4 text-yellow-500" />
               <span className="font-semibold text-sm">{data.points}</span>
             </div>
@@ -510,13 +472,13 @@ export default function App() {
         {/* Progress Bar */}
         {activeTab === 'today' && (
           <div className="max-w-md mx-auto mt-4">
-            <div className="flex justify-between text-xs font-medium text-black/50 mb-1.5 uppercase tracking-wider">
+            <div className="flex justify-between text-xs font-medium opacity-50 mb-1.5 uppercase tracking-wider">
               <span>Daily Progress</span>
               <span>{progress}%</span>
             </div>
-            <div className="h-1.5 bg-black/5 rounded-full overflow-hidden">
+            <div className={`h-1.5 rounded-full overflow-hidden ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
               <motion.div 
-                className="h-full bg-black"
+                className={`h-full ${theme.accent}`}
                 initial={{ width: 0 }}
                 animate={{ width: `${progress}%` }}
                 transition={{ type: "spring", stiffness: 50, damping: 15 }}
@@ -538,12 +500,12 @@ export default function App() {
               className="space-y-10"
             >
               {/* Sleep Countdown Widget */}
-              <div className="bg-black text-white p-6 rounded-3xl shadow-lg flex items-center justify-between">
+              <div className={`${theme.accent} ${theme.accentText} p-6 rounded-3xl shadow-lg flex items-center justify-between`}>
                 <div>
-                  <div className="text-xs font-medium text-white/60 uppercase tracking-widest mb-1">Sleep Countdown</div>
+                  <div className="text-xs font-medium opacity-60 uppercase tracking-widest mb-1">Sleep Countdown</div>
                   <div className="text-3xl font-light tracking-tighter">{timeLeftToSleep}</div>
                 </div>
-                <Moon className="w-8 h-8 text-white/20" />
+                <Moon className="w-8 h-8 opacity-20" />
               </div>
 
               {data.stacks.map((stack) => (
@@ -551,13 +513,13 @@ export default function App() {
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-4 flex-1">
                       <h2 className="text-lg font-semibold tracking-tight">{stack.title}</h2>
-                      <div className="flex-1 h-px bg-black/10"></div>
+                      <div className={`flex-1 h-px ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}></div>
                     </div>
                     <button 
                       onClick={() => setAddingToStack(stack.id)}
-                      className="ml-4 p-1.5 rounded-full bg-black/5 hover:bg-black/10 transition-colors"
+                      className={`ml-4 p-1.5 rounded-full transition-colors ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
                     >
-                      <Plus className="w-4 h-4 text-black/60" />
+                      <Plus className="w-4 h-4 opacity-60" />
                     </button>
                   </div>
                   
@@ -571,15 +533,15 @@ export default function App() {
                           key={habit.id}
                           className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
                             ${habit.completed 
-                              ? 'bg-black/5 border-transparent opacity-60' 
-                              : 'bg-white border-black/10 shadow-sm hover:border-black/30'
+                              ? `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60` 
+                              : `${theme.card} ${theme.border} shadow-sm hover:opacity-80`
                             }
                           `}
                           layout
                         >
                           <button 
                             onClick={() => toggleHabit(stack.id, habit.id)}
-                            className={`shrink-0 transition-colors duration-300 ${habit.completed ? 'text-black/50' : 'text-black'}`}
+                            className={`shrink-0 transition-colors duration-300 ${habit.completed ? 'opacity-50' : ''}`}
                           >
                             {habit.completed ? (
                               <CheckCircle2 className="w-7 h-7" />
@@ -591,7 +553,7 @@ export default function App() {
                           <div className="flex-1 min-w-0 flex flex-col items-start">
                             <button 
                               onClick={() => toggleHabit(stack.id, habit.id)}
-                              className={`font-medium text-left truncate transition-all duration-300 ${habit.completed ? 'line-through text-black/50' : 'text-black'}`}
+                              className={`font-medium text-left truncate transition-all duration-300 ${habit.completed ? 'line-through opacity-50' : ''}`}
                             >
                               {habit.title}
                             </button>
@@ -601,7 +563,7 @@ export default function App() {
                                 <input 
                                   type="time" 
                                   defaultValue={habit.time}
-                                  className="text-xs font-medium bg-black/5 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-black"
+                                  className={`text-xs font-medium rounded px-2 py-1 outline-none focus:ring-1 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black' : 'bg-white/10 focus:ring-white'}`}
                                   autoFocus
                                   onBlur={(e) => updateHabitTime(stack.id, habit.id, e.target.value)}
                                   onKeyDown={(e) => {
@@ -620,7 +582,7 @@ export default function App() {
                             ) : (
                               <button 
                                 onClick={() => setEditingHabit(habit.id)}
-                                className="flex items-center gap-1.5 mt-1 text-black/40 hover:text-black transition-colors"
+                                className="flex items-center gap-1.5 mt-1 opacity-40 hover:opacity-100 transition-colors"
                               >
                                 <Bell className="w-3.5 h-3.5" />
                                 <span className="text-xs font-medium uppercase tracking-wider">{formatTimeDisplay(habit.time)}</span>
@@ -628,7 +590,7 @@ export default function App() {
                             )}
                           </div>
                           
-                          <div className="shrink-0 text-black/20">
+                          <div className="shrink-0 opacity-20">
                             <Icon className="w-5 h-5" />
                           </div>
                         </motion.div>
@@ -637,42 +599,19 @@ export default function App() {
                   </div>
                 </section>
               ))}
-
-              {/* 7K Ecosystem Branding */}
-              <div className="pt-12 pb-6 text-center space-y-6 border-t border-black/5 mt-12">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-black/40 mb-2">Made by</p>
-                  <h3 className="text-lg font-bold tracking-tight">7K Ecosystem</h3>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Kunal (Founder)</p>
-                  <div className="flex justify-center gap-4 text-xs text-black/50">
-                    <a href="https://7kc.me" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">Portfolio</a>
-                    <span>•</span>
-                    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">Instagram</a>
-                    <span>•</span>
-                    <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">GitHub</a>
-                  </div>
-                  <a href="mailto:kunal@7kc.me" className="text-xs text-black/40 hover:text-black transition-colors block mt-1">kunal@7kc.me</a>
-                </div>
-
-                <p className="text-[10px] text-black/30 uppercase tracking-widest">© 2025 7K Ecosystem. All rights reserved.</p>
-              </div>
             </motion.div>
-          ) : activeTab === 'progress' ? (
+          ) : activeTab === 'history' ? (
             <motion.div 
-              key="progress"
+              key="history"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
               {renderCalendar()}
-              {renderSkillProgress()}
 
-              <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-4">Badges</h3>
+              <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-4">Badges</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {BADGES.map(badge => {
                     const unlocked = data.badges.includes(badge.id);
@@ -681,7 +620,7 @@ export default function App() {
                       <div 
                         key={badge.id} 
                         className={`p-4 rounded-2xl border flex flex-col items-center text-center transition-all
-                          ${unlocked ? 'bg-black text-white border-black' : 'bg-black/5 border-transparent text-black/40 opacity-60'}
+                          ${unlocked ? `${theme.accent} ${theme.accentText} border-transparent` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60`}
                         `}
                       >
                         <Icon className={`w-8 h-8 mb-2 ${unlocked ? 'text-yellow-400' : ''}`} />
@@ -695,36 +634,76 @@ export default function App() {
             </motion.div>
           ) : (
             <motion.div
-              key="focus"
+              key="settings"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
-              <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-6">Sleep Schedule</h3>
-                <div className="flex items-center justify-between p-4 bg-black/5 rounded-2xl">
+              {/* Theme Settings */}
+              <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-6">Appearance</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.keys(THEMES).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setData(prev => ({ ...prev, theme: t as ThemeKey }))}
+                      className={`p-4 rounded-xl border text-left transition-all ${data.theme === t ? `${theme.accent} ${theme.accentText} border-transparent` : `${theme.border} hover:opacity-80`}`}
+                    >
+                      <span className="capitalize font-medium">{t}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sleep Settings */}
+              <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-6">Sleep Schedule</h3>
+                <div className={`flex items-center justify-between p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
                   <div className="flex items-center gap-3">
-                    <Moon className="w-5 h-5 text-black/60" />
+                    <Moon className="w-5 h-5 opacity-60" />
                     <span className="font-medium">Sleep Time</span>
                   </div>
                   <input 
                     type="time" 
                     value={data.sleepTime}
                     onChange={(e) => setData(prev => ({ ...prev, sleepTime: e.target.value }))}
-                    className="bg-transparent font-mono text-lg outline-none cursor-pointer hover:bg-black/5 rounded px-2 transition-colors"
+                    className={`bg-transparent font-mono text-lg outline-none cursor-pointer rounded px-2 transition-colors ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
                   />
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm text-center py-12">
-                <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Brain className="w-8 h-8 text-black/40" />
+              {/* PWA Install */}
+              {installPrompt && (
+                <button 
+                  onClick={handleInstallClick}
+                  className={`w-full p-4 rounded-2xl font-bold flex items-center justify-center gap-2 ${theme.accent} ${theme.accentText}`}
+                >
+                  <Download className="w-5 h-5" />
+                  Install App
+                </button>
+              )}
+
+              {/* Branding */}
+              <div className="pt-8 pb-6 text-center space-y-6 border-t border-black/5 mt-12 opacity-60">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-2">Made by</p>
+                  <h3 className="text-lg font-bold tracking-tight">7K Ecosystem</h3>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Mindful Moment</h3>
-                <p className="text-black/60 text-sm max-w-[200px] mx-auto">
-                  Take a deep breath. Focus on the present. You are doing enough.
-                </p>
+                
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Kunal (Founder)</p>
+                  <div className="flex justify-center gap-4 text-xs opacity-70">
+                    <a href="https://7kc.me" target="_blank" rel="noopener noreferrer" className="hover:underline">Portfolio</a>
+                    <span>•</span>
+                    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Instagram</a>
+                    <span>•</span>
+                    <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:underline">GitHub</a>
+                  </div>
+                  <a href="mailto:kunal@7kc.me" className="text-xs opacity-60 hover:opacity-100 block mt-1">kunal@7kc.me</a>
+                </div>
+
+                <p className="text-[10px] opacity-50 uppercase tracking-widest">© 2025 7K Ecosystem. All rights reserved.</p>
               </div>
             </motion.div>
           )}
@@ -739,40 +718,40 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+              className={`${theme.card} w-full max-w-sm rounded-3xl p-6 shadow-2xl ${theme.text}`}
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold">Add New Habit</h3>
-                <button onClick={() => setAddingToStack(null)} className="p-2 hover:bg-black/5 rounded-full">
+                <button onClick={() => setAddingToStack(null)} className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-bold uppercase text-black/40 mb-1 block">Title</label>
+                  <label className="text-xs font-bold uppercase opacity-40 mb-1 block">Title</label>
                   <input 
                     type="text" 
                     value={newHabitTitle}
                     onChange={(e) => setNewHabitTitle(e.target.value)}
                     placeholder="e.g. Meditate"
-                    className="w-full p-3 bg-black/5 rounded-xl outline-none focus:ring-2 focus:ring-black/10"
+                    className={`w-full p-3 rounded-xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
                     autoFocus
                   />
                 </div>
                 
                 <div>
-                  <label className="text-xs font-bold uppercase text-black/40 mb-1 block">Time</label>
+                  <label className="text-xs font-bold uppercase opacity-40 mb-1 block">Time</label>
                   <input 
                     type="time" 
                     value={newHabitTime}
                     onChange={(e) => setNewHabitTime(e.target.value)}
-                    className="w-full p-3 bg-black/5 rounded-xl outline-none focus:ring-2 focus:ring-black/10"
+                    className={`w-full p-3 rounded-xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold uppercase text-black/40 mb-2 block">Icon</label>
+                  <label className="text-xs font-bold uppercase opacity-40 mb-2 block">Icon</label>
                   <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
                     {Object.keys(ICONS).slice(0, 8).map(iconName => {
                       const Icon = ICONS[iconName];
@@ -780,7 +759,7 @@ export default function App() {
                         <button
                           key={iconName}
                           onClick={() => setNewHabitIcon(iconName)}
-                          className={`p-3 rounded-xl shrink-0 transition-all ${newHabitIcon === iconName ? 'bg-black text-white' : 'bg-black/5 text-black/60'}`}
+                          className={`p-3 rounded-xl shrink-0 transition-all ${newHabitIcon === iconName ? `${theme.accent} ${theme.accentText}` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`}`}
                         >
                           <Icon className="w-5 h-5" />
                         </button>
@@ -792,7 +771,7 @@ export default function App() {
                 <button 
                   onClick={addNewHabit}
                   disabled={!newHabitTitle.trim()}
-                  className="w-full bg-black text-white py-4 rounded-xl font-medium mt-4 disabled:opacity-50"
+                  className={`w-full py-4 rounded-xl font-medium mt-4 disabled:opacity-50 ${theme.accent} ${theme.accentText}`}
                 >
                   Add Habit
                 </button>
@@ -802,7 +781,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* History Detail Modal */}
+      {/* History/Journal Detail Modal */}
       <AnimatePresence>
         {selectedDate && (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-6">
@@ -810,31 +789,51 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+              className={`${theme.card} w-full max-w-sm rounded-3xl p-6 shadow-2xl ${theme.text} max-h-[80vh] flex flex-col`}
             >
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-6 shrink-0">
                 <h3 className="text-lg font-bold">
                   {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                 </h3>
-                <button onClick={() => setSelectedDate(null)} className="p-2 hover:bg-black/5 rounded-full">
+                <button onClick={() => setSelectedDate(null)} className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                {data.history[selectedDate]?.length ? (
-                  data.stacks.flatMap(s => s.habits).filter(h => data.history[selectedDate].includes(h.id)).map(habit => {
-                    const Icon = ICONS[habit.iconName] || Circle;
-                    return (
-                      <div key={habit.id} className="flex items-center gap-3 p-3 bg-black/5 rounded-xl">
-                        <Icon className="w-5 h-5 text-black/60" />
-                        <span className="font-medium">{habit.title}</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-center text-black/40 py-4">No habits completed this day.</p>
-                )}
+              <div className="overflow-y-auto flex-1 space-y-6">
+                {/* Completed Habits List */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase opacity-40 mb-3">Completed Habits</h4>
+                  <div className="space-y-2">
+                    {data.history[selectedDate]?.length ? (
+                      data.stacks.flatMap(s => s.habits).filter(h => data.history[selectedDate].includes(h.id)).map(habit => {
+                        const Icon = ICONS[habit.iconName] || Circle;
+                        return (
+                          <div key={habit.id} className={`flex items-center gap-3 p-3 rounded-xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
+                            <Icon className="w-5 h-5 opacity-60" />
+                            <span className="font-medium">{habit.title}</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-center opacity-40 py-2 text-sm">No habits completed.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Journal Entry */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase opacity-40 mb-3 flex items-center gap-2">
+                    <Book className="w-3 h-3" />
+                    Daily Journal
+                  </h4>
+                  <textarea
+                    value={data.journal[selectedDate] || ''}
+                    onChange={(e) => updateJournal(selectedDate, e.target.value)}
+                    placeholder="Write your thoughts here..."
+                    className={`w-full h-32 p-4 rounded-xl outline-none resize-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                  />
+                </div>
               </div>
             </motion.div>
           </div>
@@ -842,7 +841,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-40">
+      <nav className={`fixed bottom-6 left-1/2 -translate-x-1/2 ${theme.accent} ${theme.accentText} rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-40`}>
         <button 
           onClick={() => setActiveTab('today')}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'today' ? 'bg-white/20' : 'hover:bg-white/10'}`}
@@ -851,18 +850,18 @@ export default function App() {
           {activeTab === 'today' && <span className="text-sm font-medium">Today</span>}
         </button>
         <button 
-          onClick={() => setActiveTab('progress')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'progress' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          onClick={() => setActiveTab('history')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'history' ? 'bg-white/20' : 'hover:bg-white/10'}`}
         >
           <CalendarIcon className="w-5 h-5" />
-          {activeTab === 'progress' && <span className="text-sm font-medium">Progress</span>}
+          {activeTab === 'history' && <span className="text-sm font-medium">History</span>}
         </button>
         <button 
-          onClick={() => setActiveTab('focus')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'focus' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'settings' ? 'bg-white/20' : 'hover:bg-white/10'}`}
         >
-          <Timer className="w-5 h-5" />
-          {activeTab === 'focus' && <span className="text-sm font-medium">Focus</span>}
+          <Settings className="w-5 h-5" />
+          {activeTab === 'settings' && <span className="text-sm font-medium">Settings</span>}
         </button>
       </nav>
 
@@ -875,8 +874,8 @@ export default function App() {
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             className="fixed bottom-24 left-0 right-0 px-6 z-30 pointer-events-none"
           >
-            <div className="max-w-md mx-auto bg-gradient-to-r from-yellow-400 to-orange-500 text-black p-4 rounded-2xl shadow-2xl flex items-center justify-center gap-3">
-              <Star className="w-6 h-6 fill-black" />
+            <div className={`max-w-md mx-auto p-4 rounded-2xl shadow-2xl flex items-center justify-center gap-3 ${theme.accent} ${theme.accentText}`}>
+              <Star className="w-6 h-6 fill-current" />
               <p className="font-bold tracking-tight">Perfect Day Unlocked!</p>
             </div>
           </motion.div>
