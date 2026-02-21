@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sun, Droplets, Dumbbell, BookOpen, Brain, Smile, Gamepad2, 
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
-  Calendar as CalendarIcon, ListTodo, Bell, Trophy
+  Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
+  Clock, X, Timer
 } from 'lucide-react';
 
 const ICONS: Record<string, ElementType> = {
   Sunrise, Sun, Smile, Droplets, Brain, Dumbbell, BookOpen, Gamepad2,
-  Flame, Star, Zap, Footprints, Trophy
+  Flame, Star, Zap, Footprints, Trophy, Circle, Moon, Clock, Timer
 };
 
 type Habit = {
@@ -82,11 +83,12 @@ type AppData = {
   points: number;
   badges: string[];
   lastDate: string;
+  sleepTime: string; // "22:00"
 };
 
 export default function App() {
   const [data, setData] = useState<AppData>(() => {
-    const saved = localStorage.getItem('7k-skills-v2');
+    const saved = localStorage.getItem('7k-skills-v3');
     const today = getTodayStr();
     
     if (saved) {
@@ -103,6 +105,8 @@ export default function App() {
             lastDate: today
           };
         }
+        // Ensure sleepTime exists for older versions
+        if (!parsed.sleepTime) parsed.sleepTime = "22:00";
         return parsed;
       } catch (e) {
         // fallback
@@ -114,15 +118,25 @@ export default function App() {
       history: {},
       points: 0,
       badges: [],
-      lastDate: today
+      lastDate: today,
+      sleepTime: "22:00"
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'today' | 'progress'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'progress' | 'focus'>('today');
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
+  
+  // New Habit State
+  const [addingToStack, setAddingToStack] = useState<string | null>(null);
+  const [newHabitTitle, setNewHabitTitle] = useState('');
+  const [newHabitTime, setNewHabitTime] = useState('12:00');
+  const [newHabitIcon, setNewHabitIcon] = useState('Circle');
+
+  // Sleep Countdown State
+  const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
 
   useEffect(() => {
-    localStorage.setItem('7k-skills-v2', JSON.stringify(data));
+    localStorage.setItem('7k-skills-v3', JSON.stringify(data));
   }, [data]);
 
   // Request Notification Permission
@@ -132,33 +146,52 @@ export default function App() {
     }
   }, []);
 
-  // Reminder Check
+  // Reminder Check & Sleep Countdown
   useEffect(() => {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
     const interval = setInterval(() => {
       const now = new Date();
       const currentHours = String(now.getHours()).padStart(2, '0');
       const currentMinutes = String(now.getMinutes()).padStart(2, '0');
       const currentTime = `${currentHours}:${currentMinutes}`;
       
-      data.stacks.forEach(stack => {
-        stack.habits.forEach(habit => {
-          if (!habit.completed && habit.time === currentTime) {
-            const notifiedKey = `notified-${getTodayStr()}-${habit.id}`;
-            if (!localStorage.getItem(notifiedKey)) {
-              new Notification("7K Skills", {
-                body: `Time for: ${habit.title}`,
-              });
-              localStorage.setItem(notifiedKey, 'true');
+      // Reminders
+      if ('Notification' in window && Notification.permission === 'granted') {
+        data.stacks.forEach(stack => {
+          stack.habits.forEach(habit => {
+            if (!habit.completed && habit.time === currentTime) {
+              const notifiedKey = `notified-${getTodayStr()}-${habit.id}`;
+              if (!localStorage.getItem(notifiedKey)) {
+                new Notification("7K Skills", {
+                  body: `Time for: ${habit.title}`,
+                  icon: '/logo.svg'
+                });
+                localStorage.setItem(notifiedKey, 'true');
+              }
             }
-          }
+          });
         });
-      });
-    }, 60000); // Check every minute
+      }
+
+      // Sleep Countdown Calculation
+      const [sleepH, sleepM] = data.sleepTime.split(':').map(Number);
+      const sleepDate = new Date();
+      sleepDate.setHours(sleepH, sleepM, 0, 0);
+      
+      if (now > sleepDate) {
+        // If passed sleep time, count down to tomorrow's sleep time
+        sleepDate.setDate(sleepDate.getDate() + 1);
+      }
+      
+      const diff = sleepDate.getTime() - now.getTime();
+      const hoursLeft = Math.floor(diff / (1000 * 60 * 60));
+      const minutesLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      setTimeLeftToSleep(`${hoursLeft}h ${minutesLeft}m`);
+
+    }, 1000); // Check every second for smoother countdown
 
     return () => clearInterval(interval);
-  }, [data.stacks]);
+  }, [data.stacks, data.sleepTime]);
 
   const calculateStreak = (history: Record<string, string[]>) => {
     let streak = 0;
@@ -249,6 +282,47 @@ export default function App() {
       })
     }));
     setEditingHabit(null);
+  };
+
+  const deleteHabit = (stackId: string, habitId: string) => {
+    if (!confirm('Delete this habit?')) return;
+    setData(prev => ({
+      ...prev,
+      stacks: prev.stacks.map(stack => {
+        if (stack.id !== stackId) return stack;
+        return {
+          ...stack,
+          habits: stack.habits.filter(h => h.id !== habitId)
+        };
+      })
+    }));
+  };
+
+  const addNewHabit = () => {
+    if (!addingToStack || !newHabitTitle.trim()) return;
+    
+    const newHabit: Habit = {
+      id: `custom-${Date.now()}`,
+      title: newHabitTitle,
+      time: newHabitTime,
+      iconName: newHabitIcon,
+      completed: false
+    };
+
+    setData(prev => ({
+      ...prev,
+      stacks: prev.stacks.map(stack => {
+        if (stack.id !== addingToStack) return stack;
+        return {
+          ...stack,
+          habits: [...stack.habits, newHabit]
+        };
+      })
+    }));
+
+    setAddingToStack(null);
+    setNewHabitTitle('');
+    setNewHabitTime('12:00');
   };
 
   const totalHabits = data.stacks.reduce((acc, stack) => acc + stack.habits.length, 0);
@@ -400,7 +474,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-md mx-auto px-6 py-6">
+      <main className="max-w-md mx-auto px-6 py-6 pb-32">
         <AnimatePresence mode="wait">
           {activeTab === 'today' ? (
             <motion.div 
@@ -410,11 +484,28 @@ export default function App() {
               exit={{ opacity: 0, x: 20 }}
               className="space-y-10"
             >
+              {/* Sleep Countdown Widget */}
+              <div className="bg-black text-white p-6 rounded-3xl shadow-lg flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium text-white/60 uppercase tracking-widest mb-1">Sleep Countdown</div>
+                  <div className="text-3xl font-light tracking-tighter">{timeLeftToSleep}</div>
+                </div>
+                <Moon className="w-8 h-8 text-white/20" />
+              </div>
+
               {data.stacks.map((stack) => (
                 <section key={stack.id} className="relative">
-                  <div className="flex items-center gap-4 mb-5">
-                    <h2 className="text-lg font-semibold tracking-tight">{stack.title}</h2>
-                    <div className="flex-1 h-px bg-black/10"></div>
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-4 flex-1">
+                      <h2 className="text-lg font-semibold tracking-tight">{stack.title}</h2>
+                      <div className="flex-1 h-px bg-black/10"></div>
+                    </div>
+                    <button 
+                      onClick={() => setAddingToStack(stack.id)}
+                      className="ml-4 p-1.5 rounded-full bg-black/5 hover:bg-black/10 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-black/60" />
+                    </button>
                   </div>
                   
                   <div className="space-y-3">
@@ -453,7 +544,7 @@ export default function App() {
                             </button>
                             
                             {isEditing ? (
-                              <div className="flex items-center gap-2 mt-2">
+                              <div className="flex items-center gap-2 mt-2 w-full">
                                 <input 
                                   type="time" 
                                   defaultValue={habit.time}
@@ -466,6 +557,12 @@ export default function App() {
                                     }
                                   }}
                                 />
+                                <button 
+                                  onClick={() => deleteHabit(stack.id, habit.id)}
+                                  className="text-xs text-red-500 hover:text-red-700 ml-auto px-2"
+                                >
+                                  Delete
+                                </button>
                               </div>
                             ) : (
                               <button 
@@ -487,8 +584,30 @@ export default function App() {
                   </div>
                 </section>
               ))}
+
+              {/* 7K Ecosystem Branding */}
+              <div className="pt-12 pb-6 text-center space-y-6 border-t border-black/5 mt-12">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-black/40 mb-2">Made by</p>
+                  <h3 className="text-lg font-bold tracking-tight">7K Ecosystem</h3>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Kunal (Founder)</p>
+                  <div className="flex justify-center gap-4 text-xs text-black/50">
+                    <a href="https://7kc.me" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">Portfolio</a>
+                    <span>•</span>
+                    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">Instagram</a>
+                    <span>•</span>
+                    <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">GitHub</a>
+                  </div>
+                  <a href="mailto:kunal@7kc.me" className="text-xs text-black/40 hover:text-black transition-colors block mt-1">kunal@7kc.me</a>
+                </div>
+
+                <p className="text-[10px] text-black/30 uppercase tracking-widest">© 2025 7K Ecosystem. All rights reserved.</p>
+              </div>
             </motion.div>
-          ) : (
+          ) : activeTab === 'progress' ? (
             <motion.div 
               key="progress"
               initial={{ opacity: 0, x: 20 }}
@@ -497,6 +616,7 @@ export default function App() {
               className="space-y-8"
             >
               {renderCalendar()}
+              {renderSkillProgress()}
 
               <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
                 <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-4">Badges</h3>
@@ -520,12 +640,117 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          ) : (
+            <motion.div
+              key="focus"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-widest text-black/50 mb-6">Sleep Schedule</h3>
+                <div className="flex items-center justify-between p-4 bg-black/5 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <Moon className="w-5 h-5 text-black/60" />
+                    <span className="font-medium">Sleep Time</span>
+                  </div>
+                  <input 
+                    type="time" 
+                    value={data.sleepTime}
+                    onChange={(e) => setData(prev => ({ ...prev, sleepTime: e.target.value }))}
+                    className="bg-transparent font-mono text-lg outline-none cursor-pointer hover:bg-black/5 rounded px-2 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm text-center py-12">
+                <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Brain className="w-8 h-8 text-black/40" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Mindful Moment</h3>
+                <p className="text-black/60 text-sm max-w-[200px] mx-auto">
+                  Take a deep breath. Focus on the present. You are doing enough.
+                </p>
+              </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </main>
 
+      {/* Add Habit Modal */}
+      <AnimatePresence>
+        {addingToStack && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold">Add New Habit</h3>
+                <button onClick={() => setAddingToStack(null)} className="p-2 hover:bg-black/5 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase text-black/40 mb-1 block">Title</label>
+                  <input 
+                    type="text" 
+                    value={newHabitTitle}
+                    onChange={(e) => setNewHabitTitle(e.target.value)}
+                    placeholder="e.g. Meditate"
+                    className="w-full p-3 bg-black/5 rounded-xl outline-none focus:ring-2 focus:ring-black/10"
+                    autoFocus
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-xs font-bold uppercase text-black/40 mb-1 block">Time</label>
+                  <input 
+                    type="time" 
+                    value={newHabitTime}
+                    onChange={(e) => setNewHabitTime(e.target.value)}
+                    className="w-full p-3 bg-black/5 rounded-xl outline-none focus:ring-2 focus:ring-black/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase text-black/40 mb-2 block">Icon</label>
+                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                    {Object.keys(ICONS).slice(0, 8).map(iconName => {
+                      const Icon = ICONS[iconName];
+                      return (
+                        <button
+                          key={iconName}
+                          onClick={() => setNewHabitIcon(iconName)}
+                          className={`p-3 rounded-xl shrink-0 transition-all ${newHabitIcon === iconName ? 'bg-black text-white' : 'bg-black/5 text-black/60'}`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={addNewHabit}
+                  disabled={!newHabitTitle.trim()}
+                  className="w-full bg-black text-white py-4 rounded-xl font-medium mt-4 disabled:opacity-50"
+                >
+                  Add Habit
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-50">
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-40">
         <button 
           onClick={() => setActiveTab('today')}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'today' ? 'bg-white/20' : 'hover:bg-white/10'}`}
@@ -540,6 +765,13 @@ export default function App() {
           <CalendarIcon className="w-5 h-5" />
           {activeTab === 'progress' && <span className="text-sm font-medium">Progress</span>}
         </button>
+        <button 
+          onClick={() => setActiveTab('focus')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'focus' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+        >
+          <Timer className="w-5 h-5" />
+          {activeTab === 'focus' && <span className="text-sm font-medium">Focus</span>}
+        </button>
       </nav>
 
       {/* Completion Toast */}
@@ -549,7 +781,7 @@ export default function App() {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-24 left-0 right-0 px-6 z-40 pointer-events-none"
+            className="fixed bottom-24 left-0 right-0 px-6 z-30 pointer-events-none"
           >
             <div className="max-w-md mx-auto bg-gradient-to-r from-yellow-400 to-orange-500 text-black p-4 rounded-2xl shadow-2xl flex items-center justify-center gap-3">
               <Star className="w-6 h-6 fill-black" />
