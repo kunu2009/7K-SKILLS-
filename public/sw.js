@@ -1,4 +1,4 @@
-const CACHE_NAME = '7k-skills-v1';
+const CACHE_NAME = '7k-skills-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

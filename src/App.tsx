@@ -425,6 +425,7 @@ export default function App() {
         <button 
           key={dateStr} 
           onClick={() => setSelectedDate(dateStr)}
+          aria-label={`View history for ${dateStr}. ${completedCount} habits completed.`}
           className={`aspect-square rounded-md ${intensityClass} transition-all relative
             ${data.theme === 'light' ? 'hover:ring-black/20 focus:ring-black' : 'hover:ring-white/20 focus:ring-white'} 
             hover:ring-2 focus:outline-none focus:ring-2`}
@@ -578,9 +579,10 @@ export default function App() {
                     </div>
                     <button 
                       onClick={() => setAddingToStack(stack.id)}
+                      aria-label={`Add habit to ${stack.title}`}
                       className={`ml-4 p-1.5 rounded-full transition-colors ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
                     >
-                      <Plus className="w-4 h-4 opacity-60" />
+                      <Plus className="w-4 h-4 opacity-60" aria-hidden="true" />
                     </button>
                   </div>
                   
@@ -602,12 +604,13 @@ export default function App() {
                         >
                           <button 
                             onClick={() => toggleHabit(stack.id, habit.id)}
+                            aria-label={`Mark ${habit.title} as ${habit.completed ? 'incomplete' : 'complete'}`}
                             className={`shrink-0 transition-colors duration-300 ${habit.completed ? 'opacity-50' : ''}`}
                           >
                             {habit.completed ? (
-                              <CheckCircle2 className="w-7 h-7" />
+                              <CheckCircle2 className="w-7 h-7" aria-hidden="true" />
                             ) : (
-                              <Circle className="w-7 h-7" />
+                              <Circle className="w-7 h-7" aria-hidden="true" />
                             )}
                           </button>
                           
@@ -643,9 +646,10 @@ export default function App() {
                             ) : (
                               <button 
                                 onClick={() => setEditingHabit(habit.id)}
+                                aria-label={`Edit time for ${habit.title}`}
                                 className="flex items-center gap-1.5 mt-1 opacity-40 hover:opacity-100 transition-colors"
                               >
-                                <Bell className="w-3.5 h-3.5" />
+                                <Bell className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span className="text-xs font-medium uppercase tracking-wider">{formatTimeDisplay(habit.time)}</span>
                               </button>
                             )}
@@ -739,9 +743,10 @@ export default function App() {
               {installPrompt && (
                 <button 
                   onClick={handleInstallClick}
+                  aria-label="Install App"
                   className={`w-full p-4 rounded-2xl font-bold flex items-center justify-center gap-2 ${theme.accent} ${theme.accentText}`}
                 >
-                  <Download className="w-5 h-5" />
+                  <Download className="w-5 h-5" aria-hidden="true" />
                   Install App
                 </button>
               )}
@@ -780,12 +785,18 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              role="dialog"
+              aria-labelledby="add-habit-title"
               className={`${theme.card} w-full max-w-sm rounded-3xl p-6 shadow-2xl ${theme.text}`}
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold">Add New Habit</h3>
-                <button onClick={() => setAddingToStack(null)} className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}>
-                  <X className="w-5 h-5" />
+                <h3 id="add-habit-title" className="text-lg font-bold">Add New Habit</h3>
+                <button 
+                  onClick={() => setAddingToStack(null)} 
+                  aria-label="Close modal"
+                  className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                >
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
               
@@ -851,14 +862,20 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              role="dialog"
+              aria-labelledby="history-detail-title"
               className={`${theme.card} w-full max-w-sm rounded-3xl p-6 shadow-2xl ${theme.text} max-h-[80vh] flex flex-col`}
             >
               <div className="flex justify-between items-center mb-6 shrink-0">
-                <h3 className="text-lg font-bold">
+                <h3 id="history-detail-title" className="text-lg font-bold">
                   {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                 </h3>
-                <button onClick={() => setSelectedDate(null)} className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}>
-                  <X className="w-5 h-5" />
+                <button 
+                  onClick={() => setSelectedDate(null)} 
+                  aria-label="Close modal"
+                  className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                >
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
               
@@ -906,23 +923,29 @@ export default function App() {
       <nav className={`fixed bottom-6 left-1/2 -translate-x-1/2 ${theme.accent} ${theme.accentText} rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-40`}>
         <button 
           onClick={() => setActiveTab('today')}
+          aria-label="Today View"
+          aria-current={activeTab === 'today' ? 'page' : undefined}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'today' ? 'bg-white/20' : 'hover:bg-white/10'}`}
         >
-          <ListTodo className="w-5 h-5" />
+          <ListTodo className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'today' && <span className="text-sm font-medium">Today</span>}
         </button>
         <button 
           onClick={() => setActiveTab('history')}
+          aria-label="History View"
+          aria-current={activeTab === 'history' ? 'page' : undefined}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'history' ? 'bg-white/20' : 'hover:bg-white/10'}`}
         >
-          <CalendarIcon className="w-5 h-5" />
+          <CalendarIcon className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'history' && <span className="text-sm font-medium">History</span>}
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
+          aria-label="Settings View"
+          aria-current={activeTab === 'settings' ? 'page' : undefined}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'settings' ? 'bg-white/20' : 'hover:bg-white/10'}`}
         >
-          <Settings className="w-5 h-5" />
+          <Settings className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'settings' && <span className="text-sm font-medium">Settings</span>}
         </button>
       </nav>
