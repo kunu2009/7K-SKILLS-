@@ -170,6 +170,9 @@ export default function App() {
   // Selected Date for History View
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  // End of Day Summary State
+  const [showEndOfDay, setShowEndOfDay] = useState(false);
+
   const theme = THEMES[data.theme];
 
   useEffect(() => {
@@ -329,6 +332,12 @@ export default function App() {
         newBadges.add('perfect_day');
         newBadges.add('daily_streak');
         newPoints += 50;
+        // Trigger End of Day Summary if not already shown today
+        const summaryKey = `summary-${today}`;
+        if (!localStorage.getItem(summaryKey)) {
+          setShowEndOfDay(true);
+          localStorage.setItem(summaryKey, 'true');
+        }
       }
 
       const currentStreak = calculateStreak(newHistory);
@@ -936,7 +945,59 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* History/Journal Detail Modal */}
+        {/* End of Day Summary Modal */}
+        <AnimatePresence>
+          {showEndOfDay && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className={`${theme.card} w-full max-w-sm rounded-3xl p-8 shadow-2xl ${theme.text} text-center relative overflow-hidden`}
+              >
+                {/* Confetti Effect Background (Simplified) */}
+                <div className="absolute inset-0 pointer-events-none opacity-10">
+                  <div className={`absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle,${data.theme === 'light' ? '#000' : '#fff'}_1px,transparent_1px)] bg-[length:20px_20px]`} />
+                </div>
+
+                <div className="relative z-10">
+                  <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ${theme.accent} ${theme.accentText} shadow-lg`}>
+                    <Trophy className="w-10 h-10" />
+                  </div>
+                  
+                  <h2 className="text-2xl font-bold mb-2">Day Complete!</h2>
+                  <p className="opacity-60 mb-8 text-sm">You've crushed all your habits for today.</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                      <div className="text-xs font-bold uppercase opacity-40 mb-1">Points Earned</div>
+                      <div className="text-2xl font-bold flex items-center justify-center gap-1">
+                        <Star className="w-5 h-5 text-yellow-500" />
+                        {data.points}
+                      </div>
+                    </div>
+                    <div className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                      <div className="text-xs font-bold uppercase opacity-40 mb-1">Current Streak</div>
+                      <div className="text-2xl font-bold flex items-center justify-center gap-1">
+                        <Flame className="w-5 h-5 text-orange-500" />
+                        {currentStreak}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowEndOfDay(false)}
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all ${theme.accent} ${theme.accentText}`}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* History/Journal Detail Modal */}
       <AnimatePresence>
         {selectedDate && (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-6">
