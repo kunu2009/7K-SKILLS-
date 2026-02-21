@@ -20,6 +20,7 @@ type Habit = {
   iconName: string;
   time: string;
   completed: boolean;
+  repeatDays?: number[]; // 0 = Sunday, 1 = Monday, etc.
 };
 
 type Stack = {
@@ -97,6 +98,7 @@ type AppData = {
   badges: string[];
   lastDate: string;
   sleepTime: string;
+  journalTime: string;
   theme: ThemeKey;
 };
 
@@ -121,6 +123,7 @@ export default function App() {
         // Migrations
         if (!parsed.journal) parsed.journal = {};
         if (!parsed.theme) parsed.theme = 'light';
+        if (!parsed.journalTime) parsed.journalTime = "20:00";
         return parsed;
       } catch (e) {
         // fallback
@@ -135,6 +138,7 @@ export default function App() {
       badges: [],
       lastDate: today,
       sleepTime: "22:00",
+      journalTime: "20:00",
       theme: 'light'
     };
   });
@@ -147,6 +151,7 @@ export default function App() {
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [newHabitTime, setNewHabitTime] = useState('12:00');
   const [newHabitIcon, setNewHabitIcon] = useState('Circle');
+  const [newHabitRepeatDays, setNewHabitRepeatDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
 
   // Sleep Countdown State
   const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
@@ -228,6 +233,18 @@ export default function App() {
             }
           });
         });
+
+        // Journal Reminder
+        if (data.journalTime === currentTime) {
+          const journalKey = `notified-journal-${todayStr}`;
+          if (!localStorage.getItem(journalKey)) {
+            new Notification("7K Skills", {
+              body: "Time to write your daily journal entry.",
+              icon: '/logo.svg'
+            });
+            localStorage.setItem(journalKey, 'true');
+          }
+        }
       }
 
       // Sleep Countdown Calculation
@@ -358,7 +375,8 @@ export default function App() {
       title: newHabitTitle,
       time: newHabitTime,
       iconName: newHabitIcon,
-      completed: false
+      completed: false,
+      repeatDays: newHabitRepeatDays.length === 7 ? undefined : newHabitRepeatDays
     };
 
     setData(prev => ({
@@ -375,6 +393,7 @@ export default function App() {
     setAddingToStack(null);
     setNewHabitTitle('');
     setNewHabitTime('12:00');
+    setNewHabitRepeatDays([0, 1, 2, 3, 4, 5, 6]);
   };
 
   const updateJournal = (date: string, text: string) => {
@@ -384,8 +403,10 @@ export default function App() {
     }));
   };
 
-  const totalHabits = data.stacks.reduce((acc, stack) => acc + stack.habits.length, 0);
-  const completedHabits = data.stacks.reduce((acc, stack) => acc + stack.habits.filter(h => h.completed).length, 0);
+  const todayDayOfWeek = new Date().getDay();
+  const todaysHabits = data.stacks.flatMap(s => s.habits).filter(h => !h.repeatDays || h.repeatDays.includes(todayDayOfWeek));
+  const totalHabits = todaysHabits.length;
+  const completedHabits = todaysHabits.filter(h => h.completed).length;
   const progress = totalHabits === 0 ? 0 : Math.round((completedHabits / totalHabits) * 100);
   const currentStreak = calculateStreak(data.history);
 
@@ -411,15 +432,17 @@ export default function App() {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayOfWeek = d.getDay();
       
       const completedCount = data.history[dateStr]?.length || 0;
       const hasJournal = !!data.journal[dateStr];
+      const totalForDay = data.stacks.flatMap(s => s.habits).filter(h => !h.repeatDays || h.repeatDays.includes(dayOfWeek)).length;
       
       let intensityClass = data.theme === 'light' ? "bg-black/5" : "bg-white/5";
       if (completedCount > 0) intensityClass = data.theme === 'light' ? "bg-black/20" : "bg-white/20";
       if (completedCount > 3) intensityClass = data.theme === 'light' ? "bg-black/40" : "bg-white/40";
       if (completedCount > 6) intensityClass = data.theme === 'light' ? "bg-black/70" : "bg-white/70";
-      if (completedCount >= totalHabits && totalHabits > 0) intensityClass = data.theme === 'light' ? "bg-black" : "bg-white";
+      if (completedCount >= totalForDay && totalForDay > 0) intensityClass = data.theme === 'light' ? "bg-black" : "bg-white";
 
       days.push(
         <button 
@@ -570,7 +593,11 @@ export default function App() {
                 <Moon className="w-8 h-8 opacity-20" />
               </div>
 
-              {data.stacks.map((stack) => (
+              {data.stacks.map((stack) => {
+                const stackHabits = stack.habits.filter(h => !h.repeatDays || h.repeatDays.includes(todayDayOfWeek));
+                if (stackHabits.length === 0) return null;
+
+                return (
                 <section key={stack.id} className="relative">
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-4 flex-1">
@@ -587,7 +614,7 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-3">
-                    {stack.habits.map((habit) => {
+                    {stackHabits.map((habit) => {
                       const Icon = ICONS[habit.iconName] || Circle;
                       const isEditing = editingHabit === habit.id;
 
@@ -663,7 +690,8 @@ export default function App() {
                     })}
                   </div>
                 </section>
-              ))}
+                );
+              })}
             </motion.div>
           ) : activeTab === 'history' ? (
             <motion.div 
@@ -724,18 +752,33 @@ export default function App() {
 
               {/* Sleep Settings */}
               <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
-                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-6">Sleep Schedule</h3>
-                <div className={`flex items-center justify-between p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
-                  <div className="flex items-center gap-3">
-                    <Moon className="w-5 h-5 opacity-60" />
-                    <span className="font-medium">Sleep Time</span>
+                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-6">Schedule</h3>
+                <div className="space-y-4">
+                  <div className={`flex items-center justify-between p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                    <div className="flex items-center gap-3">
+                      <Moon className="w-5 h-5 opacity-60" />
+                      <span className="font-medium">Sleep Time</span>
+                    </div>
+                    <input 
+                      type="time" 
+                      value={data.sleepTime}
+                      onChange={(e) => setData(prev => ({ ...prev, sleepTime: e.target.value }))}
+                      className={`bg-transparent font-mono text-lg outline-none cursor-pointer rounded px-2 transition-colors ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                    />
                   </div>
-                  <input 
-                    type="time" 
-                    value={data.sleepTime}
-                    onChange={(e) => setData(prev => ({ ...prev, sleepTime: e.target.value }))}
-                    className={`bg-transparent font-mono text-lg outline-none cursor-pointer rounded px-2 transition-colors ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
-                  />
+
+                  <div className={`flex items-center justify-between p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                    <div className="flex items-center gap-3">
+                      <Book className="w-5 h-5 opacity-60" />
+                      <span className="font-medium">Journal Reminder</span>
+                    </div>
+                    <input 
+                      type="time" 
+                      value={data.journalTime}
+                      onChange={(e) => setData(prev => ({ ...prev, journalTime: e.target.value }))}
+                      className={`bg-transparent font-mono text-lg outline-none cursor-pointer rounded px-2 transition-colors ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -824,6 +867,33 @@ export default function App() {
                 </div>
 
                 <div>
+                  <label className="text-xs font-bold uppercase opacity-40 mb-2 block">Repeat</label>
+                  <div className="flex justify-between gap-1">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (newHabitRepeatDays.includes(i)) {
+                            if (newHabitRepeatDays.length > 1) {
+                              setNewHabitRepeatDays(prev => prev.filter(d => d !== i));
+                            }
+                          } else {
+                            setNewHabitRepeatDays(prev => [...prev, i].sort());
+                          }
+                        }}
+                        className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${
+                          newHabitRepeatDays.includes(i) 
+                            ? `${theme.accent} ${theme.accentText}` 
+                            : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-40`
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <label className="text-xs font-bold uppercase opacity-40 mb-2 block">Icon</label>
                   <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
                     {Object.keys(ICONS).slice(0, 8).map(iconName => {
@@ -902,10 +972,19 @@ export default function App() {
 
                 {/* Journal Entry */}
                 <div>
-                  <h4 className="text-xs font-bold uppercase opacity-40 mb-3 flex items-center gap-2">
-                    <Book className="w-3 h-3" />
-                    Daily Journal
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold uppercase opacity-40 flex items-center gap-2">
+                      <Book className="w-3 h-3" />
+                      Daily Journal
+                    </h4>
+                    <button 
+                      onClick={() => { setSelectedDate(null); setActiveTab('settings'); }}
+                      className={`p-1.5 rounded-full transition-colors ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                      title="Set Journal Reminder"
+                    >
+                      <Bell className="w-3.5 h-3.5 opacity-40" />
+                    </button>
+                  </div>
                   <textarea
                     value={data.journal[selectedDate] || ''}
                     onChange={(e) => updateJournal(selectedDate, e.target.value)}
