@@ -57,5 +57,53 @@ export const DEFAULT_TEMPLATES: WorkoutTemplate[] = [
       { exerciseId: 'dead_hang', targetReps: '3 sets of 60 secs' },
       { exerciseId: 'hollow_body', targetReps: '2 sets of 60 secs' }
     ]
+  },
+  {
+    id: 'navy_seal_core',
+    title: 'Navy Seal Core & Chest',
+    duration: '20 Min',
+    iconName: 'Flame',
+    description: 'Intense upper body and core workout inspired by military training.',
+    exercises: [
+      { exerciseId: 'navy_seal_pushup', targetReps: '4 sets of 10-15 reps' },
+      { exerciseId: 'russian_twists', targetReps: '3 sets of 20 reps (each side)' },
+      { exerciseId: 'side_plank_dips', targetReps: '3 sets of 15 reps (each side)' }
+    ]
+  },
+  {
+    id: 'veiny_forearms',
+    title: 'Veiny & Bigger Forearms',
+    duration: '15 Min',
+    iconName: 'Zap',
+    description: 'Targeted forearm and grip strength routine for vascularity.',
+    exercises: [
+      { exerciseId: 'wrist_curls_towel', targetReps: '4 sets to failure' },
+      { exerciseId: 'fingertip_pushup', targetReps: '3 sets of 30 secs hold' },
+      { exerciseId: 'dead_hang', targetReps: '3 sets to failure' }
+    ]
+  },
+  {
+    id: 'handstand_prep',
+    title: 'Handstand Mastery',
+    duration: '25 Min',
+    iconName: 'Star',
+    description: 'Build the shoulder strength and balance required for a freestanding handstand.',
+    exercises: [
+      { exerciseId: 'pike_push_up', targetReps: '4 sets of 8-12 reps' },
+      { exerciseId: 'handstand_wall', targetReps: '4 sets of 30-60 secs hold' },
+      { exerciseId: 'hollow_body', targetReps: '3 sets of 45 secs' }
+    ]
+  },
+  {
+    id: 'model_face',
+    title: 'Model Face Routine',
+    duration: '10 Min',
+    iconName: 'Smile',
+    description: 'Advanced facial exercises for higher cheekbones and a sharper jawline.',
+    exercises: [
+      { exerciseId: 'mewing', targetReps: 'Constant reminder' },
+      { exerciseId: 'jawline_clench', targetReps: '4 sets of 15 secs hold' },
+      { exerciseId: 'cheek_lifter', targetReps: '3 sets of 20 reps' }
+    ]
   }
 ];

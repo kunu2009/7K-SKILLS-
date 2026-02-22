@@ -63,60 +63,6 @@ const INITIAL_STACKS: Stack[] = [
   }
 ];
 
-const WORKOUT_PLANS = [
-  {
-    id: 'full_body',
-    title: 'Daily Full Body',
-    duration: '15 Min',
-    icon: Dumbbell,
-    exercises: [
-      { name: 'Jumping Jacks', reps: '30 secs' },
-      { name: 'Push-ups', reps: '15 reps' },
-      { name: 'Squats', reps: '20 reps' },
-      { name: 'Plank', reps: '60 secs' },
-      { name: 'Lunges', reps: '10 each leg' }
-    ]
-  },
-  {
-    id: 'face_yoga',
-    title: 'Face Exercises',
-    duration: '5 Min',
-    icon: Smile,
-    exercises: [
-      { name: 'The V (Eye lift)', reps: '10 reps' },
-      { name: 'Smile Smoother', reps: '30 secs' },
-      { name: 'Neck Stretch', reps: '15 secs each side' },
-      { name: 'Jawline Definer', reps: '10 reps' }
-    ]
-  },
-  {
-    id: 'stretching',
-    title: 'Morning Stretch',
-    duration: '10 Min',
-    icon: Sunrise,
-    exercises: [
-      { name: 'Neck Rolls', reps: '5 each direction' },
-      { name: 'Shoulder Rolls', reps: '10 reps' },
-      { name: 'Cat-Cow', reps: '10 reps' },
-      { name: 'Downward Dog', reps: '30 secs' },
-      { name: 'Childs Pose', reps: '60 secs' }
-    ]
-  },
-  {
-    id: 'core',
-    title: 'Core Crusher',
-    duration: '12 Min',
-    icon: Zap,
-    exercises: [
-      { name: 'Crunches', reps: '20 reps' },
-      { name: 'Leg Raises', reps: '15 reps' },
-      { name: 'Russian Twists', reps: '20 reps' },
-      { name: 'Bicycle Crunches', reps: '20 reps' },
-      { name: 'Plank', reps: '60 secs' }
-    ]
-  }
-];
-
 const BADGES = [
   { id: 'first_step', title: 'First Step', description: 'Complete your first habit', iconName: 'Footprints' },
   { id: 'perfect_day', title: 'Perfect Day', description: 'Complete all habits in a day', iconName: 'Star' },
@@ -259,6 +205,12 @@ export default function App() {
   const [newTemplateDesc, setNewTemplateDesc] = useState('');
   const [newTemplateExercises, setNewTemplateExercises] = useState<{exerciseId: string, reps: string}[]>([]);
   const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
+
+  // Todo State
+  const [newTodoText, setNewTodoText] = useState('');
+
+  // Iframe state
+  const [showStudyIframe, setShowStudyIframe] = useState(false);
 
   // PWA Install Prompt State
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -613,6 +565,30 @@ export default function App() {
     setNewTemplateDesc('');
     setNewTemplateExercises([]);
     setWorkoutTab('templates');
+  };
+
+  // Todo Logic
+  const addTodo = () => {
+    if (!newTodoText.trim()) return;
+    const newTodo: Todo = {
+      id: `todo-${Date.now()}`,
+      text: newTodoText,
+      completed: false,
+      date: viewingDate
+    };
+    setData(prev => ({ ...prev, todos: [...prev.todos, newTodo] }));
+    setNewTodoText('');
+  };
+
+  const toggleTodo = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      todos: prev.todos.map(t => t.id === id ? { ...t, completed: !t.completed } : t)
+    }));
+  };
+
+  const deleteTodo = (id: string) => {
+    setData(prev => ({ ...prev, todos: prev.todos.filter(t => t.id !== id) }));
   };
 
   const renderCalendar = () => {
