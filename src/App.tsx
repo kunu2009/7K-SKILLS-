@@ -1853,6 +1853,37 @@ export default function App() {
                 <p className="text-lg opacity-80 leading-relaxed">{activeMastery.description}</p>
 
                 <div className="space-y-6">
+                  {activeMastery.dailyPractices && activeMastery.dailyPractices.length > 0 && (
+                    <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                      <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4">Daily Practice</h3>
+                      <div className="space-y-3">
+                        {activeMastery.dailyPractices.map((practice, idx) => (
+                          <div key={idx} className={`flex items-start gap-3 p-3 rounded-xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                            <Circle className="w-5 h-5 opacity-40 shrink-0 mt-0.5" />
+                            <span className="text-sm font-medium leading-snug">{practice}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeMastery.resources && activeMastery.resources.length > 0 && (
+                    <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                      <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4">Resources</h3>
+                      <div className="space-y-4">
+                        {activeMastery.resources.map((resource, idx) => (
+                          <div key={idx} className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                            <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
+                              {resource.type === 'video' ? <Video className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                              {resource.title}
+                            </h4>
+                            {resource.content && <p className="text-xs opacity-70 leading-relaxed">{resource.content}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {activeMastery.levels?.map((level) => {
                     const progress = data.masteryProgress[activeMastery.id] || [];
                     const levelCompleted = level.tasks.every(t => progress.includes(t));

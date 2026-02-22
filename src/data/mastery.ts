@@ -5,6 +5,13 @@ export type MasteryLevel = {
   tasks: string[];
 };
 
+export type MasteryResource = {
+  title: string;
+  type: 'video' | 'article' | 'tool';
+  url?: string;
+  content?: string;
+};
+
 export type MasteryPath = {
   id: string;
   title: string;
@@ -12,6 +19,8 @@ export type MasteryPath = {
   status: 'available' | 'coming_soon';
   description: string;
   levels?: MasteryLevel[];
+  dailyPractices?: string[];
+  resources?: MasteryResource[];
 };
 
 export const MASTERY_PATHS: MasteryPath[] = [
@@ -66,6 +75,23 @@ export const MASTERY_PATHS: MasteryPath[] = [
           'Opposition concept'
         ]
       }
+    ],
+    dailyPractices: [
+      'Solve 5 tactical puzzles',
+      'Play 1 Rapid game (10+0 or 15+10)',
+      'Analyze 1 lost game to find the critical mistake'
+    ],
+    resources: [
+      {
+        title: 'Opening Principles',
+        type: 'article',
+        content: '1. Control the center with pawns. 2. Develop knights before bishops. 3. Don\'t move the same piece twice in the opening. 4. Castle early. 5. Don\'t bring the queen out too early.'
+      },
+      {
+        title: 'Basic Checkmates',
+        type: 'article',
+        content: 'Ladder Mate: Use two rooks or a rook and queen to walk the enemy king to the edge of the board. King and Queen Mate: Box the king in, bring your king to help deliver the final blow.'
+      }
     ]
   },
   {
@@ -118,6 +144,23 @@ export const MASTERY_PATHS: MasteryPath[] = [
           'Learn basic React concepts (Components, State, Props)',
           'Build a simple To-Do list app in React'
         ]
+      }
+    ],
+    dailyPractices: [
+      'Write code for at least 30 minutes',
+      'Read one technical article or documentation page',
+      'Review and refactor an old piece of code'
+    ],
+    resources: [
+      {
+        title: 'HTML/CSS Cheatsheet',
+        type: 'article',
+        content: 'Flexbox: display: flex; justify-content: center; align-items: center; Grid: display: grid; grid-template-columns: repeat(3, 1fr);'
+      },
+      {
+        title: 'JS Array Methods',
+        type: 'article',
+        content: '.map() transforms elements. .filter() keeps matching elements. .reduce() accumulates a value. .forEach() iterates without returning.'
       }
     ]
   },
