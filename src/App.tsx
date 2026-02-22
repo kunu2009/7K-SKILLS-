@@ -5,16 +5,19 @@ import {
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
   Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
-  Smartphone, Trash2, ChevronLeft, Target, Play, Info, Edit2, Save
+  Smartphone, Trash2, ChevronLeft, Target, Play, Info, Edit2, Save,
+  Code, Music, Box, Layout, Video, Lock
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { EXERCISE_DB, ExerciseDef } from './data/exercises';
 import { DEFAULT_TEMPLATES, WorkoutTemplate } from './data/templates';
 import { WorkoutLog, WorkoutLogExercise } from './data/types';
+import { MASTERY_PATHS, MasteryPath } from './data/mastery';
 
 const ICONS: Record<string, ElementType> = {
   Sunrise, Sun, Smile, Droplets, Brain, Dumbbell, BookOpen, Gamepad2,
-  Flame, Star, Zap, Footprints, Trophy, Circle, Moon, Clock, Timer
+  Flame, Star, Zap, Footprints, Trophy, Circle, Moon, Clock, Timer,
+  Code, Music, Box, Layout, Video, Lock
 };
 
 type Habit = {
@@ -122,6 +125,7 @@ type AppData = {
   customTemplates: WorkoutTemplate[];
   workoutLogs: Record<string, WorkoutLog[]>;
   todos: Todo[];
+  masteryProgress: Record<string, string[]>; // pathId -> array of completed task strings
 };
 
 export default function App() {
@@ -157,6 +161,7 @@ export default function App() {
         if (!parsed.customTemplates) parsed.customTemplates = [];
         if (!parsed.workoutLogs) parsed.workoutLogs = {};
         if (!parsed.todos) parsed.todos = [];
+        if (!parsed.masteryProgress) parsed.masteryProgress = {};
         return parsed;
       } catch (e) {
         // fallback
@@ -176,7 +181,8 @@ export default function App() {
       goals: [],
       customTemplates: [],
       workoutLogs: {},
-      todos: []
+      todos: [],
+      masteryProgress: {}
     };
   });
 
@@ -211,6 +217,9 @@ export default function App() {
 
   // Iframe state
   const [showStudyIframe, setShowStudyIframe] = useState(false);
+
+  // Mastery State
+  const [activeMastery, setActiveMastery] = useState<MasteryPath | null>(null);
 
   // PWA Install Prompt State
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -589,6 +598,25 @@ export default function App() {
 
   const deleteTodo = (id: string) => {
     setData(prev => ({ ...prev, todos: prev.todos.filter(t => t.id !== id) }));
+  };
+
+  // Mastery Logic
+  const toggleMasteryTask = (pathId: string, task: string) => {
+    setData(prev => {
+      const currentProgress = prev.masteryProgress[pathId] || [];
+      const isCompleted = currentProgress.includes(task);
+      const newProgress = isCompleted 
+        ? currentProgress.filter(t => t !== task)
+        : [...currentProgress, task];
+      
+      return {
+        ...prev,
+        masteryProgress: {
+          ...prev.masteryProgress,
+          [pathId]: newProgress
+        }
+      };
+    });
   };
 
   const renderCalendar = () => {
@@ -1049,6 +1077,54 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* Mastery Paths Section */}
+              <div className="mt-12">
+                <h2 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
+                  <Star className="w-6 h-6" />
+                  Skill Mastery
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {MASTERY_PATHS.map(path => {
+                    const Icon = ICONS[path.iconName] || Star;
+                    const isAvailable = path.status === 'available';
+                    const progress = data.masteryProgress[path.id] || [];
+                    const totalTasks = path.levels?.reduce((acc, level) => acc + level.tasks.length, 0) || 0;
+                    const progressPercent = totalTasks > 0 ? Math.round((progress.length / totalTasks) * 100) : 0;
+
+                    return (
+                      <button
+                        key={path.id}
+                        onClick={() => isAvailable && setActiveMastery(path)}
+                        className={`relative p-4 rounded-3xl border text-left flex flex-col items-center text-center transition-all ${isAvailable ? `${theme.card} ${theme.border} hover:scale-105 shadow-sm` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60 cursor-not-allowed`}`}
+                      >
+                        {!isAvailable && (
+                          <div className="absolute top-3 right-3 opacity-50">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${isAvailable ? `${theme.accent} ${theme.accentText}` : 'bg-black/10 dark:bg-white/10'}`}>
+                          <Icon className="w-6 h-6" />
+                        </div>
+                        <h3 className="font-bold text-sm leading-tight mb-1">{path.title}</h3>
+                        {isAvailable ? (
+                          <div className="w-full mt-2">
+                            <div className="flex justify-between text-[10px] font-bold opacity-50 mb-1">
+                              <span>{progressPercent}%</span>
+                              <span>{progress.length}/{totalTasks}</span>
+                            </div>
+                            <div className={`w-full h-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'} overflow-hidden`}>
+                              <div className={`h-full ${theme.accent}`} style={{ width: `${progressPercent}%` }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-50 mt-2">Coming Soon</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </motion.div>
           ) : activeTab === 'workouts' ? (
             <motion.div 
@@ -1286,7 +1362,7 @@ export default function App() {
                   {Object.entries(data.workoutLogs).sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()).map(([date, logs]) => (
                     <div key={date} className="space-y-4">
                       <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest">{new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</h3>
-                      {logs.map(log => (
+                      {(logs as WorkoutLog[]).map(log => (
                         <div key={log.id} className={`${theme.card} p-5 rounded-3xl border ${theme.border} shadow-sm`}>
                           <div className="flex justify-between items-start mb-4">
                             <div>
@@ -1749,6 +1825,75 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mastery Path Fullscreen Modal */}
+      <AnimatePresence>
+        {activeMastery && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className={`fixed inset-0 z-[80] ${theme.bg} ${theme.text} overflow-y-auto`}
+          >
+            <div className="max-w-md mx-auto min-h-screen pb-24">
+              <div className="sticky top-0 z-10 pt-12 pb-4 px-6 backdrop-blur-xl bg-inherit/80 border-b border-white/5 flex items-center justify-between">
+                <h2 className="text-2xl font-bold tracking-tight">{activeMastery.title}</h2>
+                <button 
+                  onClick={() => setActiveMastery(null)} 
+                  className={`p-3 rounded-full ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-8">
+                <p className="text-lg opacity-80 leading-relaxed">{activeMastery.description}</p>
+
+                <div className="space-y-6">
+                  {activeMastery.levels?.map((level) => {
+                    const progress = data.masteryProgress[activeMastery.id] || [];
+                    const levelCompleted = level.tasks.every(t => progress.includes(t));
+                    
+                    return (
+                      <div key={level.level} className={`${theme.card} p-6 rounded-3xl border ${levelCompleted ? `border-green-500/30 ${data.theme === 'light' ? 'bg-green-50' : 'bg-green-900/10'}` : theme.border} shadow-sm relative overflow-hidden`}>
+                        {levelCompleted && (
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-bl-full flex items-start justify-end p-3">
+                            <CheckCircle2 className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                        <div className="mb-4 pr-8">
+                          <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-1">Level {level.level}</h3>
+                          <h4 className="text-xl font-bold">{level.title}</h4>
+                          <p className="text-sm opacity-70 mt-1">{level.description}</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {level.tasks.map((task, idx) => {
+                            const isTaskCompleted = progress.includes(task);
+                            return (
+                              <button 
+                                key={idx}
+                                onClick={() => toggleMasteryTask(activeMastery.id, task)}
+                                className={`w-full flex items-start gap-3 p-3 rounded-xl text-left transition-all ${isTaskCompleted ? `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} opacity-60` : `${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}`}
+                              >
+                                <div className="shrink-0 mt-0.5">
+                                  {isTaskCompleted ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 opacity-40" />}
+                                </div>
+                                <span className={`text-sm font-medium leading-snug ${isTaskCompleted ? 'line-through' : ''}`}>{task}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
