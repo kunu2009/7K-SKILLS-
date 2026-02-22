@@ -5,7 +5,7 @@ import {
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
   Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
-  Smartphone, Trash2
+  Smartphone, Trash2, ChevronLeft, Target
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -91,6 +91,13 @@ const formatTimeDisplay = (time24: string) => {
   return `${displayHours}:${m} ${ampm}`;
 };
 
+type Goal = {
+  id: string;
+  title: string;
+  targetDate: string;
+  completed: boolean;
+};
+
 type AppData = {
   stacks: Stack[];
   history: Record<string, string[]>; // date -> array of completed habit ids
@@ -101,6 +108,7 @@ type AppData = {
   sleepTime: string;
   journalTime: string;
   theme: ThemeKey;
+  goals: Goal[];
 };
 
 export default function App() {
@@ -132,6 +140,7 @@ export default function App() {
         });
         if (!parsed.theme) parsed.theme = 'light';
         if (!parsed.journalTime) parsed.journalTime = "20:00";
+        if (!parsed.goals) parsed.goals = [];
         return parsed;
       } catch (e) {
         // fallback
@@ -147,12 +156,14 @@ export default function App() {
       lastDate: today,
       sleepTime: "22:00",
       journalTime: "20:00",
-      theme: 'light'
+      theme: 'light',
+      goals: []
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'settings'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'goals' | 'settings'>('today');
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
+  const [viewingDate, setViewingDate] = useState<string>(getTodayStr());
   
   // New Habit State
   const [addingToStack, setAddingToStack] = useState<string | null>(null);
@@ -160,6 +171,10 @@ export default function App() {
   const [newHabitTime, setNewHabitTime] = useState('12:00');
   const [newHabitIcon, setNewHabitIcon] = useState('Circle');
   const [newHabitRepeatDays, setNewHabitRepeatDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+
+  // Goals State
+  const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalDate, setNewGoalDate] = useState('');
 
   // Sleep Countdown State
   const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
@@ -222,6 +237,7 @@ export default function App() {
           })),
           lastDate: todayStr
         }));
+        setViewingDate(todayStr);
       }
 
       const currentHours = String(now.getHours()).padStart(2, '0');
@@ -300,43 +316,39 @@ export default function App() {
 
   const toggleHabit = (stackId: string, habitId: string) => {
     setData(prev => {
-      const today = getTodayStr();
       let newPoints = prev.points;
       const newBadges = new Set(prev.badges);
       
-      const newStacks = prev.stacks.map(stack => {
-        if (stack.id !== stackId) return stack;
-        return {
-          ...stack,
-          habits: stack.habits.map(habit => {
-            if (habit.id !== habitId) return habit;
-            
-            const isCompleting = !habit.completed;
-            if (isCompleting) {
-              newPoints += 10;
-              newBadges.add('first_step');
-            } else {
-              newPoints = Math.max(0, newPoints - 10);
-            }
-            
-            return { ...habit, completed: isCompleting };
-          })
-        };
-      });
+      const currentCompleted = prev.history[viewingDate] || [];
+      const isCompleting = !currentCompleted.includes(habitId);
+      
+      let newCompleted;
+      if (isCompleting) {
+        newCompleted = [...currentCompleted, habitId];
+        newPoints += 10;
+        newBadges.add('first_step');
+      } else {
+        newCompleted = currentCompleted.filter(id => id !== habitId);
+        newPoints = Math.max(0, newPoints - 10);
+      }
+      
+      const newHistory = { ...prev.history, [viewingDate]: newCompleted };
 
-      const completedToday = newStacks.flatMap(s => s.habits).filter(h => h.completed).map(h => h.id);
-      const newHistory = { ...prev.history, [today]: completedToday };
+      const d = new Date(viewingDate);
+      const dayOfWeek = d.getDay();
+      const totalHabitsForDay = prev.stacks.flatMap(s => s.habits).filter(h => !h.repeatDays || h.repeatDays.includes(dayOfWeek)).length;
 
-      const totalHabits = newStacks.reduce((acc, s) => acc + s.habits.length, 0);
-      if (completedToday.length === totalHabits && totalHabits > 0) {
+      if (newCompleted.length === totalHabitsForDay && totalHabitsForDay > 0) {
         newBadges.add('perfect_day');
         newBadges.add('daily_streak');
         newPoints += 50;
-        // Trigger End of Day Summary if not already shown today
-        const summaryKey = `summary-${today}`;
-        if (!localStorage.getItem(summaryKey)) {
-          setShowEndOfDay(true);
-          localStorage.setItem(summaryKey, 'true');
+        
+        if (viewingDate === getTodayStr()) {
+          const summaryKey = `summary-${viewingDate}`;
+          if (!localStorage.getItem(summaryKey)) {
+            setShowEndOfDay(true);
+            localStorage.setItem(summaryKey, 'true');
+          }
         }
       }
 
@@ -346,7 +358,6 @@ export default function App() {
 
       return {
         ...prev,
-        stacks: newStacks,
         history: newHistory,
         points: newPoints,
         badges: Array.from(newBadges)
@@ -414,6 +425,34 @@ export default function App() {
     setNewHabitRepeatDays([0, 1, 2, 3, 4, 5, 6]);
   };
 
+  const addNewGoal = () => {
+    if (!newGoalTitle.trim() || !newGoalDate) return;
+    const newGoal: Goal = {
+      id: `goal-${Date.now()}`,
+      title: newGoalTitle,
+      targetDate: newGoalDate,
+      completed: false
+    };
+    setData(prev => ({ ...prev, goals: [...prev.goals, newGoal] }));
+    setNewGoalTitle('');
+    setNewGoalDate('');
+  };
+
+  const toggleGoal = (goalId: string) => {
+    setData(prev => ({
+      ...prev,
+      goals: prev.goals.map(g => g.id === goalId ? { ...g, completed: !g.completed } : g)
+    }));
+  };
+
+  const deleteGoal = (goalId: string) => {
+    if (!confirm("Delete this goal?")) return;
+    setData(prev => ({
+      ...prev,
+      goals: prev.goals.filter(g => g.id !== goalId)
+    }));
+  };
+
   const updateJournal = (date: string, field: 'text' | 'mood' | 'highlights', value: any) => {
     setData(prev => {
       const entry = prev.journal[date] || { text: '', mood: 'neutral', highlights: [] };
@@ -424,12 +463,20 @@ export default function App() {
     });
   };
 
-  const todayDayOfWeek = new Date().getDay();
-  const todaysHabits = data.stacks.flatMap(s => s.habits).filter(h => !h.repeatDays || h.repeatDays.includes(todayDayOfWeek));
-  const totalHabits = todaysHabits.length;
-  const completedHabits = todaysHabits.filter(h => h.completed).length;
+  const viewingDateObj = new Date(viewingDate);
+  const viewingDayOfWeek = viewingDateObj.getDay();
+  const viewingHabits = data.stacks.flatMap(s => s.habits).filter(h => !h.repeatDays || h.repeatDays.includes(viewingDayOfWeek));
+  const totalHabits = viewingHabits.length;
+  const completedHabits = viewingHabits.filter(h => (data.history[viewingDate] || []).includes(h.id)).length;
   const progress = totalHabits === 0 ? 0 : Math.round((completedHabits / totalHabits) * 100);
   const currentStreak = calculateStreak(data.history);
+
+  const changeDate = (days: number) => {
+    const [year, month, day] = viewingDate.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    d.setDate(d.getDate() + days);
+    setViewingDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  };
 
   const renderCalendar = () => {
     const days = [];
@@ -559,9 +606,19 @@ export default function App() {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">7K Skills</h1>
-            <p className="text-[10px] font-medium opacity-40 uppercase tracking-widest mt-0.5">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </p>
+            {activeTab === 'today' ? (
+              <div className="flex items-center gap-2 mt-0.5">
+                <button onClick={() => changeDate(-1)} className="opacity-40 hover:opacity-100 p-1 -ml-1"><ChevronLeft className="w-4 h-4" /></button>
+                <p className="text-[10px] font-medium opacity-60 uppercase tracking-widest">
+                  {viewingDate === getTodayStr() ? 'Today, ' : ''}{new Date(viewingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </p>
+                <button onClick={() => changeDate(1)} disabled={viewingDate === getTodayStr()} className="opacity-40 hover:opacity-100 disabled:opacity-10 p-1"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <p className="text-[10px] font-medium opacity-40 uppercase tracking-widest mt-0.5">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
@@ -615,7 +672,7 @@ export default function App() {
               </div>
 
               {data.stacks.map((stack) => {
-                const stackHabits = stack.habits.filter(h => !h.repeatDays || h.repeatDays.includes(todayDayOfWeek));
+                const stackHabits = stack.habits.filter(h => !h.repeatDays || h.repeatDays.includes(viewingDayOfWeek));
                 if (stackHabits.length === 0) return null;
 
                 return (
@@ -625,25 +682,28 @@ export default function App() {
                       <h2 className="text-lg font-semibold tracking-tight">{stack.title}</h2>
                       <div className={`flex-1 h-px ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}></div>
                     </div>
-                    <button 
-                      onClick={() => setAddingToStack(stack.id)}
-                      aria-label={`Add habit to ${stack.title}`}
-                      className={`ml-4 p-1.5 rounded-full transition-colors ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
-                    >
-                      <Plus className="w-4 h-4 opacity-60" aria-hidden="true" />
-                    </button>
+                    {viewingDate === getTodayStr() && (
+                      <button 
+                        onClick={() => setAddingToStack(stack.id)}
+                        aria-label={`Add habit to ${stack.title}`}
+                        className={`ml-4 p-1.5 rounded-full transition-colors ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
+                      >
+                        <Plus className="w-4 h-4 opacity-60" aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                   
                   <div className="space-y-3">
                     {stackHabits.map((habit) => {
                       const Icon = ICONS[habit.iconName] || Circle;
                       const isEditing = editingHabit === habit.id;
+                      const isCompleted = (data.history[viewingDate] || []).includes(habit.id);
 
                       return (
                         <motion.div
                           key={habit.id}
                           className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
-                            ${habit.completed 
+                            ${isCompleted 
                               ? `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60` 
                               : `${theme.card} ${theme.border} shadow-sm hover:opacity-80`
                             }
@@ -652,10 +712,10 @@ export default function App() {
                         >
                           <button 
                             onClick={() => toggleHabit(stack.id, habit.id)}
-                            aria-label={`Mark ${habit.title} as ${habit.completed ? 'incomplete' : 'complete'}`}
-                            className={`shrink-0 transition-colors duration-300 ${habit.completed ? 'opacity-50' : ''}`}
+                            aria-label={`Mark ${habit.title} as ${isCompleted ? 'incomplete' : 'complete'}`}
+                            className={`shrink-0 transition-colors duration-300 ${isCompleted ? 'opacity-50' : ''}`}
                           >
-                            {habit.completed ? (
+                            {isCompleted ? (
                               <CheckCircle2 className="w-7 h-7" aria-hidden="true" />
                             ) : (
                               <Circle className="w-7 h-7" aria-hidden="true" />
@@ -665,7 +725,7 @@ export default function App() {
                           <div className="flex-1 min-w-0 flex flex-col items-start">
                             <button 
                               onClick={() => toggleHabit(stack.id, habit.id)}
-                              className={`font-medium text-left truncate transition-all duration-300 ${habit.completed ? 'line-through opacity-50' : ''}`}
+                              className={`font-medium text-left truncate transition-all duration-300 ${isCompleted ? 'line-through opacity-50' : ''}`}
                             >
                               {habit.title}
                             </button>
@@ -745,6 +805,75 @@ export default function App() {
                     );
                   })}
                 </div>
+              </div>
+            </motion.div>
+          ) : activeTab === 'goals' ? (
+            <motion.div 
+              key="goals"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8"
+            >
+              <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                <h3 className="text-sm font-semibold uppercase tracking-widest opacity-50 mb-6">Add New Goal</h3>
+                <div className="space-y-4">
+                  <input 
+                    type="text" 
+                    value={newGoalTitle}
+                    onChange={(e) => setNewGoalTitle(e.target.value)}
+                    placeholder="e.g. Read 12 books this year"
+                    className={`w-full p-4 rounded-2xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                  />
+                  <div className="flex gap-4">
+                    <input 
+                      type="date" 
+                      value={newGoalDate}
+                      onChange={(e) => setNewGoalDate(e.target.value)}
+                      className={`flex-1 p-4 rounded-2xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                    />
+                    <button 
+                      onClick={addNewGoal}
+                      disabled={!newGoalTitle.trim() || !newGoalDate}
+                      className={`px-6 rounded-2xl font-bold disabled:opacity-50 ${theme.accent} ${theme.accentText}`}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {data.goals.map(goal => (
+                  <div key={goal.id} className={`${theme.card} p-5 rounded-3xl border ${theme.border} shadow-sm flex items-center gap-4`}>
+                    <button 
+                      onClick={() => toggleGoal(goal.id)}
+                      className={`shrink-0 transition-colors duration-300 ${goal.completed ? 'opacity-50' : ''}`}
+                    >
+                      {goal.completed ? (
+                        <CheckCircle2 className="w-8 h-8" />
+                      ) : (
+                        <Circle className="w-8 h-8" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-semibold truncate ${goal.completed ? 'line-through opacity-50' : ''}`}>{goal.title}</h4>
+                      <div className="flex items-center gap-1.5 mt-1 opacity-50 text-xs font-medium uppercase tracking-wider">
+                        <CalendarIcon className="w-3.5 h-3.5" />
+                        {new Date(goal.targetDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <button onClick={() => deleteGoal(goal.id)} className="p-2 opacity-20 hover:opacity-100 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                {data.goals.length === 0 && (
+                  <div className="text-center opacity-40 py-10">
+                    <Target className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p>No goals set yet.</p>
+                  </div>
+                )}
               </div>
             </motion.div>
           ) : (
@@ -1148,6 +1277,15 @@ export default function App() {
         >
           <CalendarIcon className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'history' && <span className="text-sm font-medium">History</span>}
+        </button>
+        <button 
+          onClick={() => setActiveTab('goals')}
+          aria-label="Goals View"
+          aria-current={activeTab === 'goals' ? 'page' : undefined}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'goals' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+        >
+          <Target className="w-5 h-5" aria-hidden="true" />
+          {activeTab === 'goals' && <span className="text-sm font-medium">Goals</span>}
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
