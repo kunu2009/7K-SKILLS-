@@ -6,18 +6,20 @@ import {
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
   Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
   Smartphone, Trash2, ChevronLeft, Target, Play, Info, Edit2, Save,
-  Code, Music, Box, Layout, Video, Lock
+  Code, Music, Box, Layout, Video, Lock, Mic, MessageSquare, Users,
+  Swords, TrendingUp, Eye, EyeOff, Activity, Upload
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { EXERCISE_DB, ExerciseDef } from './data/exercises';
 import { DEFAULT_TEMPLATES, WorkoutTemplate } from './data/templates';
 import { WorkoutLog, WorkoutLogExercise } from './data/types';
-import { MASTERY_PATHS, MasteryPath } from './data/mastery';
+import { MASTERY_PATHS, MasteryPath, MasteryCategory } from './data/mastery';
 
 const ICONS: Record<string, ElementType> = {
   Sunrise, Sun, Smile, Droplets, Brain, Dumbbell, BookOpen, Gamepad2,
   Flame, Star, Zap, Footprints, Trophy, Circle, Moon, Clock, Timer,
-  Code, Music, Box, Layout, Video, Lock
+  Code, Music, Box, Layout, Video, Lock, Mic, MessageSquare, Users,
+  Swords, TrendingUp
 };
 
 type Habit = {
@@ -111,6 +113,15 @@ type Todo = {
   date: string; // YYYY-MM-DD
 };
 
+type WeeklyReview = {
+  id: string;
+  date: string;
+  improved: string;
+  failed: string;
+  distracted: string;
+  adjust: string;
+};
+
 type AppData = {
   stacks: Stack[];
   history: Record<string, string[]>; // date -> array of completed habit ids
@@ -126,6 +137,12 @@ type AppData = {
   workoutLogs: Record<string, WorkoutLog[]>;
   todos: Todo[];
   masteryProgress: Record<string, string[]>; // pathId -> array of completed task strings
+  masteryOutputs: Record<string, Record<string, number>>; // pathId -> trackerId -> value
+  masteryProofs: Record<string, string>; // pathId -> proof link/text
+  masteryDifficulty: Record<string, 'easy' | 'standard' | 'warrior'>;
+  masteryStreaks: Record<string, number>;
+  weeklyReviews: WeeklyReview[];
+  focusMode: boolean;
 };
 
 export default function App() {
@@ -162,6 +179,12 @@ export default function App() {
         if (!parsed.workoutLogs) parsed.workoutLogs = {};
         if (!parsed.todos) parsed.todos = [];
         if (!parsed.masteryProgress) parsed.masteryProgress = {};
+        if (!parsed.masteryOutputs) parsed.masteryOutputs = {};
+        if (!parsed.masteryProofs) parsed.masteryProofs = {};
+        if (!parsed.masteryDifficulty) parsed.masteryDifficulty = {};
+        if (!parsed.masteryStreaks) parsed.masteryStreaks = {};
+        if (!parsed.weeklyReviews) parsed.weeklyReviews = [];
+        if (typeof parsed.focusMode !== 'boolean') parsed.focusMode = false;
         return parsed;
       } catch (e) {
         // fallback
@@ -182,7 +205,13 @@ export default function App() {
       customTemplates: [],
       workoutLogs: {},
       todos: [],
-      masteryProgress: {}
+      masteryProgress: {},
+      masteryOutputs: {},
+      masteryProofs: {},
+      masteryDifficulty: {},
+      masteryStreaks: {},
+      weeklyReviews: [],
+      focusMode: false
     };
   });
 
@@ -220,6 +249,13 @@ export default function App() {
 
   // Mastery State
   const [activeMastery, setActiveMastery] = useState<MasteryPath | null>(null);
+
+  // Weekly Review State
+  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+  const [reviewImproved, setReviewImproved] = useState('');
+  const [reviewFailed, setReviewFailed] = useState('');
+  const [reviewDistracted, setReviewDistracted] = useState('');
+  const [reviewAdjust, setReviewAdjust] = useState('');
 
   // PWA Install Prompt State
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -617,6 +653,25 @@ export default function App() {
         }
       };
     });
+  };
+
+  const saveWeeklyReview = () => {
+    if (!reviewImproved && !reviewFailed && !reviewDistracted && !reviewAdjust) return;
+    const newReview: WeeklyReview = {
+      id: `review-${Date.now()}`,
+      date: getTodayStr(),
+      improved: reviewImproved,
+      failed: reviewFailed,
+      distracted: reviewDistracted,
+      adjust: reviewAdjust
+    };
+    setData(prev => ({ ...prev, weeklyReviews: [newReview, ...prev.weeklyReviews] }));
+    setShowWeeklyReview(false);
+    // Reset fields
+    setReviewImproved('');
+    setReviewFailed('');
+    setReviewDistracted('');
+    setReviewAdjust('');
   };
 
   const renderCalendar = () => {
@@ -1080,50 +1135,92 @@ export default function App() {
 
               {/* Mastery Paths Section */}
               <div className="mt-12">
-                <h2 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
-                  <Star className="w-6 h-6" />
-                  Skill Mastery
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {MASTERY_PATHS.map(path => {
-                    const Icon = ICONS[path.iconName] || Star;
-                    const isAvailable = path.status === 'available';
-                    const progress = data.masteryProgress[path.id] || [];
-                    const totalTasks = path.levels?.reduce((acc, level) => acc + level.tasks.length, 0) || 0;
-                    const progressPercent = totalTasks > 0 ? Math.round((progress.length / totalTasks) * 100) : 0;
-
-                    return (
-                      <button
-                        key={path.id}
-                        onClick={() => isAvailable && setActiveMastery(path)}
-                        className={`relative p-4 rounded-3xl border text-left flex flex-col items-center text-center transition-all ${isAvailable ? `${theme.card} ${theme.border} hover:scale-105 shadow-sm` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60 cursor-not-allowed`}`}
-                      >
-                        {!isAvailable && (
-                          <div className="absolute top-3 right-3 opacity-50">
-                            <Lock className="w-4 h-4" />
-                          </div>
-                        )}
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${isAvailable ? `${theme.accent} ${theme.accentText}` : 'bg-black/10 dark:bg-white/10'}`}>
-                          <Icon className="w-6 h-6" />
-                        </div>
-                        <h3 className="font-bold text-sm leading-tight mb-1">{path.title}</h3>
-                        {isAvailable ? (
-                          <div className="w-full mt-2">
-                            <div className="flex justify-between text-[10px] font-bold opacity-50 mb-1">
-                              <span>{progressPercent}%</span>
-                              <span>{progress.length}/{totalTasks}</span>
-                            </div>
-                            <div className={`w-full h-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'} overflow-hidden`}>
-                              <div className={`h-full ${theme.accent}`} style={{ width: `${progressPercent}%` }} />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-50 mt-2">Coming Soon</span>
-                        )}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <Star className="w-7 h-7" />
+                    Skill Mastery
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowWeeklyReview(true)}
+                      className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
+                    >
+                      <CalendarIcon className="w-4 h-4" />
+                      Weekly Review
+                    </button>
+                    <button
+                      onClick={() => setData(prev => ({ ...prev, focusMode: !prev.focusMode }))}
+                      className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${data.focusMode ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}`}
+                    >
+                      {data.focusMode ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      Focus Mode
+                    </button>
+                  </div>
                 </div>
+
+                {['Mental Dominance', 'Physical Power', 'Technical Empire', 'Creative Weapons', 'Social & Communication'].map(category => {
+                  const categoryPaths = MASTERY_PATHS.filter(p => p.category === category);
+                  if (categoryPaths.length === 0) return null;
+
+                  return (
+                    <div key={category} className="mb-10">
+                      <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4">{category}</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {categoryPaths.map(path => {
+                          const Icon = ICONS[path.iconName] || Star;
+                          const isAvailable = path.status === 'available';
+                          const progress = data.masteryProgress[path.id] || [];
+                          const totalTasks = path.levels?.reduce((acc, level) => acc + level.tasks.length, 0) || 0;
+                          const progressPercent = totalTasks > 0 ? Math.round((progress.length / totalTasks) * 100) : 0;
+                          const streak = data.masteryStreaks[path.id] || 0;
+                          
+                          // In focus mode, blur unavailable skills
+                          const isBlurred = data.focusMode && !isAvailable;
+
+                          return (
+                            <button
+                              key={path.id}
+                              onClick={() => isAvailable && setActiveMastery(path)}
+                              className={`relative p-4 rounded-3xl border text-left flex flex-col items-center text-center transition-all 
+                                ${isAvailable ? `${theme.card} ${theme.border} hover:scale-105 shadow-sm` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} border-transparent opacity-60 cursor-not-allowed`}
+                                ${isBlurred ? 'blur-sm opacity-30 scale-95 pointer-events-none' : ''}
+                              `}
+                            >
+                              {!isAvailable && (
+                                <div className="absolute top-3 right-3 opacity-50">
+                                  <Lock className="w-4 h-4" />
+                                </div>
+                              )}
+                              {isAvailable && (
+                                <div className="absolute top-3 right-3 flex items-center gap-1 opacity-70">
+                                  <Flame className="w-3 h-3 text-orange-500" />
+                                  <span className="text-[10px] font-bold">{streak}</span>
+                                </div>
+                              )}
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${isAvailable ? `${theme.accent} ${theme.accentText}` : 'bg-black/10 dark:bg-white/10'}`}>
+                                <Icon className="w-6 h-6" />
+                              </div>
+                              <h3 className="font-bold text-sm leading-tight mb-1">{path.title}</h3>
+                              {isAvailable ? (
+                                <div className="w-full mt-2">
+                                  <div className="flex justify-between text-[10px] font-bold opacity-50 mb-1">
+                                    <span>{progressPercent}%</span>
+                                    <span>{progress.length}/{totalTasks}</span>
+                                  </div>
+                                  <div className={`w-full h-1.5 rounded-full ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'} overflow-hidden`}>
+                                    <div className={`h-full ${theme.accent}`} style={{ width: `${progressPercent}%` }} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50 mt-2">Coming Soon</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           ) : activeTab === 'workouts' ? (
@@ -1850,7 +1947,149 @@ export default function App() {
               </div>
 
               <div className="p-6 space-y-8">
-                <p className="text-lg opacity-80 leading-relaxed">{activeMastery.description}</p>
+                {/* Identity Layer */}
+                {activeMastery.identity && (
+                  <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm relative overflow-hidden`}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+                    <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 flex items-center gap-2">
+                      <Target className="w-4 h-4" /> Why This Matters
+                    </h3>
+                    <p className="text-sm font-medium leading-relaxed mb-4">{activeMastery.identity.why}</p>
+                    
+                    <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 flex items-center gap-2">
+                      <Brain className="w-4 h-4" /> Who I Am Becoming
+                    </h3>
+                    <p className="text-lg font-bold italic leading-tight text-indigo-500 dark:text-indigo-400">"{activeMastery.identity.who}"</p>
+                  </div>
+                )}
+
+                {/* Difficulty Mode */}
+                <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                  <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Activity className="w-4 h-4" /> Difficulty Mode
+                  </h3>
+                  <div className="flex gap-2">
+                    {(['easy', 'standard', 'warrior'] as const).map(mode => {
+                      const currentMode = data.masteryDifficulty[activeMastery.id] || 'standard';
+                      const isActive = currentMode === mode;
+                      const colors = {
+                        easy: 'bg-green-500 text-white',
+                        standard: 'bg-yellow-500 text-white',
+                        warrior: 'bg-red-500 text-white'
+                      };
+                      return (
+                        <button
+                          key={mode}
+                          onClick={() => setData(prev => ({ ...prev, masteryDifficulty: { ...prev.masteryDifficulty, [activeMastery.id]: mode } }))}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${isActive ? colors[mode] : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'} opacity-50 hover:opacity-100`}`}
+                        >
+                          {mode}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Output Tracker */}
+                {activeMastery.outputTrackers && activeMastery.outputTrackers.length > 0 && (
+                  <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                    <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" /> Output Tracker
+                    </h3>
+                    <div className="space-y-4">
+                      {activeMastery.outputTrackers.map(tracker => {
+                        const val = data.masteryOutputs[activeMastery.id]?.[tracker.id] || 0;
+                        return (
+                          <div key={tracker.id} className="flex items-center justify-between">
+                            <div>
+                              <div className="font-bold text-sm">{tracker.label}</div>
+                              <div className="text-xs opacity-50 uppercase tracking-wider">{tracker.unit}</div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button 
+                                onClick={() => setData(prev => ({
+                                  ...prev, 
+                                  masteryOutputs: {
+                                    ...prev.masteryOutputs,
+                                    [activeMastery.id]: {
+                                      ...(prev.masteryOutputs[activeMastery.id] || {}),
+                                      [tracker.id]: Math.max(0, val - 1)
+                                    }
+                                  }
+                                }))}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
+                              >
+                                -
+                              </button>
+                              <span className="font-mono font-bold text-lg w-12 text-center">{val}</span>
+                              <button 
+                                onClick={() => setData(prev => ({
+                                  ...prev, 
+                                  masteryOutputs: {
+                                    ...prev.masteryOutputs,
+                                    [activeMastery.id]: {
+                                      ...(prev.masteryOutputs[activeMastery.id] || {}),
+                                      [tracker.id]: val + 1
+                                    }
+                                  }
+                                }))}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Proof of Work */}
+                {activeMastery.proofLabel && (
+                  <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                    <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Upload className="w-4 h-4" /> Proof of Work
+                    </h3>
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold opacity-70">{activeMastery.proofLabel}</label>
+                      <input 
+                        type="text"
+                        placeholder="Paste link here..."
+                        value={data.masteryProofs[activeMastery.id] || ''}
+                        onChange={(e) => setData(prev => ({
+                          ...prev,
+                          masteryProofs: {
+                            ...prev.masteryProofs,
+                            [activeMastery.id]: e.target.value
+                          }
+                        }))}
+                        className={`w-full p-3 rounded-xl outline-none focus:ring-2 text-sm ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Heatmap (Mocked for now) */}
+                <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                  <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4" /> Practice Heatmap
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from({ length: 28 }).map((_, i) => {
+                      // Mock some activity
+                      const isActive = Math.random() > 0.5;
+                      const isDeepWork = isActive && Math.random() > 0.7;
+                      return (
+                        <div 
+                          key={i} 
+                          className={`w-6 h-6 rounded-md ${!isActive ? (data.theme === 'light' ? 'bg-black/5' : 'bg-white/5') : isDeepWork ? 'bg-green-600' : 'bg-green-400'}`}
+                          title={isActive ? (isDeepWork ? 'Deep Work' : 'Practiced') : 'Missed'}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <div className="space-y-6">
                   {activeMastery.dailyPractices && activeMastery.dailyPractices.length > 0 && (
@@ -1949,6 +2188,119 @@ export default function App() {
               />
             </div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Weekly Review Modal */}
+      <AnimatePresence>
+        {showWeeklyReview && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className={`fixed inset-0 z-[90] ${theme.bg} ${theme.text} overflow-y-auto`}
+          >
+            <div className="max-w-md mx-auto min-h-screen pb-24">
+              <div className="sticky top-0 z-10 pt-12 pb-4 px-6 backdrop-blur-xl bg-inherit/80 border-b border-white/5 flex items-center justify-between">
+                <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                  <CalendarIcon className="w-6 h-6" /> Weekly Review
+                </h2>
+                <button 
+                  onClick={() => setShowWeeklyReview(false)} 
+                  className={`p-3 rounded-full ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-8">
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 block">What improved this week?</label>
+                    <textarea 
+                      value={reviewImproved}
+                      onChange={(e) => setReviewImproved(e.target.value)}
+                      placeholder="I was more consistent with..."
+                      className={`w-full p-4 rounded-2xl outline-none focus:ring-2 min-h-[100px] resize-y ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/5 focus:ring-white/10'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 block">Where did I fail?</label>
+                    <textarea 
+                      value={reviewFailed}
+                      onChange={(e) => setReviewFailed(e.target.value)}
+                      placeholder="I missed my workouts because..."
+                      className={`w-full p-4 rounded-2xl outline-none focus:ring-2 min-h-[100px] resize-y ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/5 focus:ring-white/10'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 block">What distracted me?</label>
+                    <textarea 
+                      value={reviewDistracted}
+                      onChange={(e) => setReviewDistracted(e.target.value)}
+                      placeholder="Social media, gaming..."
+                      className={`w-full p-4 rounded-2xl outline-none focus:ring-2 min-h-[100px] resize-y ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/5 focus:ring-white/10'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold opacity-50 uppercase tracking-widest mb-2 block">How will I adjust next week?</label>
+                    <textarea 
+                      value={reviewAdjust}
+                      onChange={(e) => setReviewAdjust(e.target.value)}
+                      placeholder="I will put my phone away at 9 PM..."
+                      className={`w-full p-4 rounded-2xl outline-none focus:ring-2 min-h-[100px] resize-y ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/5 focus:ring-white/10'}`}
+                    />
+                  </div>
+                  <button 
+                    onClick={saveWeeklyReview}
+                    className={`w-full py-4 rounded-2xl font-bold text-lg ${theme.accent} ${theme.accentText} transition-transform hover:scale-[1.02] active:scale-95`}
+                  >
+                    Save Review
+                  </button>
+                </div>
+
+                {data.weeklyReviews.length > 0 && (
+                  <div className="mt-12">
+                    <h3 className="text-lg font-bold mb-6">Past Reviews</h3>
+                    <div className="space-y-4">
+                      {data.weeklyReviews.map(review => (
+                        <div key={review.id} className={`${theme.card} p-5 rounded-3xl border ${theme.border} shadow-sm space-y-4`}>
+                          <div className="text-xs font-bold opacity-50 uppercase tracking-widest">
+                            {new Date(review.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                          {review.improved && (
+                            <div>
+                              <div className="text-xs font-bold text-green-500 mb-1">Improved</div>
+                              <p className="text-sm opacity-80">{review.improved}</p>
+                            </div>
+                          )}
+                          {review.failed && (
+                            <div>
+                              <div className="text-xs font-bold text-red-500 mb-1">Failed</div>
+                              <p className="text-sm opacity-80">{review.failed}</p>
+                            </div>
+                          )}
+                          {review.distracted && (
+                            <div>
+                              <div className="text-xs font-bold text-orange-500 mb-1">Distracted</div>
+                              <p className="text-sm opacity-80">{review.distracted}</p>
+                            </div>
+                          )}
+                          {review.adjust && (
+                            <div>
+                              <div className="text-xs font-bold text-indigo-500 mb-1">Adjustments</div>
+                              <p className="text-sm opacity-80">{review.adjust}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
