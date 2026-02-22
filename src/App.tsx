@@ -5,9 +5,12 @@ import {
   CheckCircle2, Circle, Sunrise, Flame, Star, Zap, Footprints,
   Calendar as CalendarIcon, ListTodo, Bell, Trophy, Plus, Moon,
   Clock, X, Timer, Download, ChevronRight, Settings, Book, Palette,
-  Smartphone, Trash2, ChevronLeft, Target
+  Smartphone, Trash2, ChevronLeft, Target, Play, Info, Edit2, Save
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { EXERCISE_DB, ExerciseDef } from './data/exercises';
+import { DEFAULT_TEMPLATES, WorkoutTemplate } from './data/templates';
+import { WorkoutLog, WorkoutLogExercise } from './data/types';
 
 const ICONS: Record<string, ElementType> = {
   Sunrise, Sun, Smile, Droplets, Brain, Dumbbell, BookOpen, Gamepad2,
@@ -60,6 +63,60 @@ const INITIAL_STACKS: Stack[] = [
   }
 ];
 
+const WORKOUT_PLANS = [
+  {
+    id: 'full_body',
+    title: 'Daily Full Body',
+    duration: '15 Min',
+    icon: Dumbbell,
+    exercises: [
+      { name: 'Jumping Jacks', reps: '30 secs' },
+      { name: 'Push-ups', reps: '15 reps' },
+      { name: 'Squats', reps: '20 reps' },
+      { name: 'Plank', reps: '60 secs' },
+      { name: 'Lunges', reps: '10 each leg' }
+    ]
+  },
+  {
+    id: 'face_yoga',
+    title: 'Face Exercises',
+    duration: '5 Min',
+    icon: Smile,
+    exercises: [
+      { name: 'The V (Eye lift)', reps: '10 reps' },
+      { name: 'Smile Smoother', reps: '30 secs' },
+      { name: 'Neck Stretch', reps: '15 secs each side' },
+      { name: 'Jawline Definer', reps: '10 reps' }
+    ]
+  },
+  {
+    id: 'stretching',
+    title: 'Morning Stretch',
+    duration: '10 Min',
+    icon: Sunrise,
+    exercises: [
+      { name: 'Neck Rolls', reps: '5 each direction' },
+      { name: 'Shoulder Rolls', reps: '10 reps' },
+      { name: 'Cat-Cow', reps: '10 reps' },
+      { name: 'Downward Dog', reps: '30 secs' },
+      { name: 'Childs Pose', reps: '60 secs' }
+    ]
+  },
+  {
+    id: 'core',
+    title: 'Core Crusher',
+    duration: '12 Min',
+    icon: Zap,
+    exercises: [
+      { name: 'Crunches', reps: '20 reps' },
+      { name: 'Leg Raises', reps: '15 reps' },
+      { name: 'Russian Twists', reps: '20 reps' },
+      { name: 'Bicycle Crunches', reps: '20 reps' },
+      { name: 'Plank', reps: '60 secs' }
+    ]
+  }
+];
+
 const BADGES = [
   { id: 'first_step', title: 'First Step', description: 'Complete your first habit', iconName: 'Footprints' },
   { id: 'perfect_day', title: 'Perfect Day', description: 'Complete all habits in a day', iconName: 'Star' },
@@ -109,6 +166,8 @@ type AppData = {
   journalTime: string;
   theme: ThemeKey;
   goals: Goal[];
+  customTemplates: WorkoutTemplate[];
+  workoutLogs: Record<string, WorkoutLog[]>;
 };
 
 export default function App() {
@@ -141,6 +200,8 @@ export default function App() {
         if (!parsed.theme) parsed.theme = 'light';
         if (!parsed.journalTime) parsed.journalTime = "20:00";
         if (!parsed.goals) parsed.goals = [];
+        if (!parsed.customTemplates) parsed.customTemplates = [];
+        if (!parsed.workoutLogs) parsed.workoutLogs = {};
         return parsed;
       } catch (e) {
         // fallback
@@ -157,11 +218,13 @@ export default function App() {
       sleepTime: "22:00",
       journalTime: "20:00",
       theme: 'light',
-      goals: []
+      goals: [],
+      customTemplates: [],
+      workoutLogs: {}
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'goals' | 'settings'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'goals' | 'workouts' | 'settings'>('today');
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
   const [viewingDate, setViewingDate] = useState<string>(getTodayStr());
   
@@ -176,7 +239,15 @@ export default function App() {
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newGoalDate, setNewGoalDate] = useState('');
 
-  // Sleep Countdown State
+  // Workout State
+  const [workoutTab, setWorkoutTab] = useState<'templates' | 'library' | 'active' | 'create' | 'logs'>('templates');
+  const [activeWorkout, setActiveWorkout] = useState<WorkoutLog | null>(null);
+  const [viewingExercise, setViewingExercise] = useState<ExerciseDef | null>(null);
+  
+  // Create Template State
+  const [newTemplateTitle, setNewTemplateTitle] = useState('');
+  const [newTemplateDesc, setNewTemplateDesc] = useState('');
+  const [newTemplateExercises, setNewTemplateExercises] = useState<{exerciseId: string, reps: string}[]>([]);
   const [timeLeftToSleep, setTimeLeftToSleep] = useState<string>('');
 
   // PWA Install Prompt State
@@ -476,6 +547,62 @@ export default function App() {
     const d = new Date(year, month - 1, day);
     d.setDate(d.getDate() + days);
     setViewingDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  };
+
+  const startWorkout = (template: WorkoutTemplate) => {
+    const newLog: WorkoutLog = {
+      id: `log-${Date.now()}`,
+      templateId: template.id,
+      title: template.title,
+      date: getTodayStr(),
+      completedAt: '',
+      exercises: template.exercises.map(ex => ({
+        exerciseId: ex.exerciseId,
+        targetReps: ex.targetReps,
+        actualReps: ex.targetReps // Default to target, user can edit
+      }))
+    };
+    setActiveWorkout(newLog);
+    setWorkoutTab('active');
+  };
+
+  const completeWorkout = () => {
+    if (!activeWorkout) return;
+    const completedLog = { ...activeWorkout, completedAt: new Date().toISOString() };
+    setData(prev => ({
+      ...prev,
+      workoutLogs: {
+        ...prev.workoutLogs,
+        [getTodayStr()]: [...(prev.workoutLogs[getTodayStr()] || []), completedLog]
+      },
+      points: prev.points + 20 // Bonus for completing workout
+    }));
+    setActiveWorkout(null);
+    setWorkoutTab('templates');
+  };
+
+  const updateActiveWorkoutReps = (index: number, actualReps: string) => {
+    if (!activeWorkout) return;
+    const newExercises = [...activeWorkout.exercises];
+    newExercises[index].actualReps = actualReps;
+    setActiveWorkout({ ...activeWorkout, exercises: newExercises });
+  };
+
+  const saveCustomTemplate = () => {
+    if (!newTemplateTitle.trim() || newTemplateExercises.length === 0) return;
+    const newTemplate: WorkoutTemplate = {
+      id: `custom-${Date.now()}`,
+      title: newTemplateTitle,
+      description: newTemplateDesc,
+      duration: 'Custom',
+      iconName: 'Dumbbell',
+      exercises: newTemplateExercises.map(e => ({ exerciseId: e.exerciseId, targetReps: e.reps }))
+    };
+    setData(prev => ({ ...prev, customTemplates: [...prev.customTemplates, newTemplate] }));
+    setNewTemplateTitle('');
+    setNewTemplateDesc('');
+    setNewTemplateExercises([]);
+    setWorkoutTab('templates');
   };
 
   const renderCalendar = () => {
@@ -876,6 +1003,275 @@ export default function App() {
                 )}
               </div>
             </motion.div>
+          ) : activeTab === 'workouts' ? (
+            <motion.div 
+              key="workouts"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
+            >
+              {/* Workout Sub-navigation */}
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar">
+                <button 
+                  onClick={() => setWorkoutTab('templates')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${workoutTab === 'templates' ? `${theme.accent} ${theme.accentText}` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`}`}
+                >
+                  Templates
+                </button>
+                <button 
+                  onClick={() => setWorkoutTab('library')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${workoutTab === 'library' ? `${theme.accent} ${theme.accentText}` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`}`}
+                >
+                  Exercise Library
+                </button>
+                <button 
+                  onClick={() => setWorkoutTab('logs')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${workoutTab === 'logs' ? `${theme.accent} ${theme.accentText}` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`}`}
+                >
+                  Logs
+                </button>
+                {activeWorkout && (
+                  <button 
+                    onClick={() => setWorkoutTab('active')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1 ${workoutTab === 'active' ? `bg-red-500 text-white` : `bg-red-500/20 text-red-500`}`}
+                  >
+                    <Play className="w-4 h-4" /> Active Workout
+                  </button>
+                )}
+                <button 
+                  onClick={() => setWorkoutTab('create')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1 ${workoutTab === 'create' ? `${theme.accent} ${theme.accentText}` : `${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'} opacity-60`}`}
+                >
+                  <Plus className="w-4 h-4" /> Create Custom
+                </button>
+              </div>
+
+              {workoutTab === 'templates' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-bold tracking-tight mb-4">Recommended for You</h2>
+                  {[...DEFAULT_TEMPLATES, ...data.customTemplates].map(template => {
+                    const Icon = ICONS[template.iconName] || Dumbbell;
+                    return (
+                      <div key={template.id} className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}>
+                              <Icon className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold tracking-tight">{template.title}</h3>
+                              <p className="text-xs font-medium opacity-50 uppercase tracking-widest">{template.duration} • {template.exercises.length} Exercises</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => startWorkout(template)}
+                            className={`p-3 rounded-full ${theme.accent} ${theme.accentText} shadow-lg hover:scale-105 transition-transform`}
+                          >
+                            <Play className="w-5 h-5 ml-0.5" />
+                          </button>
+                        </div>
+                        <p className="text-sm opacity-70 mb-4">{template.description}</p>
+                        <div className="space-y-2">
+                          {template.exercises.map((ex, idx) => {
+                            const exerciseDef = EXERCISE_DB.find(e => e.id === ex.exerciseId);
+                            return (
+                              <div key={idx} className={`flex items-center justify-between p-3 rounded-xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{exerciseDef?.name || 'Unknown'}</span>
+                                  <button onClick={() => setViewingExercise(exerciseDef || null)} className="opacity-40 hover:opacity-100"><Info className="w-4 h-4" /></button>
+                                </div>
+                                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}>{ex.targetReps}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {workoutTab === 'library' && (
+                <div className="space-y-4">
+                  {EXERCISE_DB.map(exercise => (
+                    <div key={exercise.id} className={`${theme.card} p-4 rounded-2xl border ${theme.border} shadow-sm flex items-center justify-between`}>
+                      <div>
+                        <h4 className="font-bold">{exercise.name}</h4>
+                        <p className="text-xs opacity-50 uppercase tracking-widest mt-1">{exercise.category}</p>
+                      </div>
+                      <button 
+                        onClick={() => setViewingExercise(exercise)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium ${data.theme === 'light' ? 'bg-black/5 hover:bg-black/10' : 'bg-white/10 hover:bg-white/20'}`}
+                      >
+                        How To
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {workoutTab === 'create' && (
+                <div className="space-y-6">
+                  <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                    <h2 className="text-xl font-bold tracking-tight mb-6">Create Custom Template</h2>
+                    
+                    <div className="space-y-4 mb-8">
+                      <input 
+                        type="text" 
+                        value={newTemplateTitle}
+                        onChange={(e) => setNewTemplateTitle(e.target.value)}
+                        placeholder="Workout Title"
+                        className={`w-full p-4 rounded-2xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                      />
+                      <input 
+                        type="text" 
+                        value={newTemplateDesc}
+                        onChange={(e) => setNewTemplateDesc(e.target.value)}
+                        placeholder="Description (Optional)"
+                        className={`w-full p-4 rounded-2xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                      />
+                    </div>
+
+                    <h3 className="font-bold mb-4">Exercises</h3>
+                    <div className="space-y-3 mb-6">
+                      {newTemplateExercises.map((ex, idx) => {
+                        const def = EXERCISE_DB.find(e => e.id === ex.exerciseId);
+                        return (
+                          <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                            <span className="font-medium flex-1 truncate">{def?.name}</span>
+                            <input 
+                              type="text" 
+                              value={ex.reps}
+                              onChange={(e) => {
+                                const newExs = [...newTemplateExercises];
+                                newExs[idx].reps = e.target.value;
+                                setNewTemplateExercises(newExs);
+                              }}
+                              placeholder="e.g. 3x10"
+                              className={`w-24 p-2 rounded-lg text-sm text-center outline-none ${data.theme === 'light' ? 'bg-white' : 'bg-black/20'}`}
+                            />
+                            <button onClick={() => setNewTemplateExercises(newTemplateExercises.filter((_, i) => i !== idx))} className="p-2 opacity-40 hover:opacity-100 hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {newTemplateExercises.length === 0 && (
+                        <p className="text-sm opacity-50 text-center py-4">No exercises added yet.</p>
+                      )}
+                    </div>
+
+                    <div className="mb-8">
+                      <h4 className="text-xs font-bold uppercase opacity-40 mb-3">Add Exercise</h4>
+                      <select 
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setNewTemplateExercises([...newTemplateExercises, { exerciseId: e.target.value, reps: '3 sets of 10' }]);
+                            e.target.value = '';
+                          }
+                        }}
+                        className={`w-full p-4 rounded-2xl outline-none appearance-none ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/10'}`}
+                      >
+                        <option value="">Select an exercise...</option>
+                        {EXERCISE_DB.map(ex => (
+                          <option key={ex.id} value={ex.id}>{ex.name} ({ex.category})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button 
+                      onClick={saveCustomTemplate}
+                      disabled={!newTemplateTitle.trim() || newTemplateExercises.length === 0}
+                      className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg transition-all disabled:opacity-50 ${theme.accent} ${theme.accentText}`}
+                    >
+                      Save Template
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {workoutTab === 'active' && activeWorkout && (
+                <div className="space-y-6">
+                  <div className={`${theme.card} p-6 rounded-3xl border ${theme.border} shadow-sm`}>
+                    <h2 className="text-2xl font-bold tracking-tight mb-2">{activeWorkout.title}</h2>
+                    <p className="text-sm opacity-50 mb-6">Log your actual reps/time below.</p>
+                    
+                    <div className="space-y-4">
+                      {activeWorkout.exercises.map((ex, idx) => {
+                        const exerciseDef = EXERCISE_DB.find(e => e.id === ex.exerciseId);
+                        return (
+                          <div key={idx} className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold">{exerciseDef?.name || 'Unknown'}</span>
+                                <button onClick={() => setViewingExercise(exerciseDef || null)} className="opacity-40 hover:opacity-100"><Info className="w-4 h-4" /></button>
+                              </div>
+                              <span className="text-xs opacity-50">Target: {ex.targetReps}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <input 
+                                type="text" 
+                                value={ex.actualReps}
+                                onChange={(e) => updateActiveWorkoutReps(idx, e.target.value)}
+                                placeholder="Actual reps/time"
+                                className={`flex-1 p-3 rounded-xl outline-none text-sm font-medium focus:ring-2 ${data.theme === 'light' ? 'bg-white focus:ring-black/10' : 'bg-black/20 focus:ring-white/10'}`}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <button 
+                      onClick={completeWorkout}
+                      className={`w-full mt-8 py-4 rounded-2xl font-bold text-lg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all bg-green-500 text-white`}
+                    >
+                      Finish Workout
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {workoutTab === 'logs' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-bold tracking-tight mb-4">Workout History</h2>
+                  {Object.entries(data.workoutLogs).sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()).map(([date, logs]) => (
+                    <div key={date} className="space-y-4">
+                      <h3 className="text-sm font-bold opacity-50 uppercase tracking-widest">{new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</h3>
+                      {logs.map(log => (
+                        <div key={log.id} className={`${theme.card} p-5 rounded-3xl border ${theme.border} shadow-sm`}>
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="font-bold text-lg">{log.title}</h4>
+                              <p className="text-xs opacity-50 mt-1">Completed at {new Date(log.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                            <CheckCircle2 className="w-6 h-6 text-green-500" />
+                          </div>
+                          <div className="space-y-2">
+                            {log.exercises.map((ex, idx) => {
+                              const def = EXERCISE_DB.find(e => e.id === ex.exerciseId);
+                              return (
+                                <div key={idx} className={`flex items-center justify-between p-3 rounded-xl ${data.theme === 'light' ? 'bg-black/5' : 'bg-white/5'}`}>
+                                  <span className="font-medium text-sm">{def?.name}</span>
+                                  <span className={`text-xs font-bold px-2 py-1 rounded-lg ${data.theme === 'light' ? 'bg-black/10' : 'bg-white/10'}`}>{ex.actualReps}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {Object.keys(data.workoutLogs).length === 0 && (
+                    <div className="text-center opacity-40 py-10">
+                      <Dumbbell className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                      <p>No workouts completed yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
           ) : (
             <motion.div
               key="settings"
@@ -1258,6 +1654,57 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Exercise Detail Modal */}
+      <AnimatePresence>
+        {viewingExercise && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className={`${theme.card} w-full max-w-md rounded-3xl p-6 shadow-2xl ${theme.text} max-h-[85vh] flex flex-col`}
+            >
+              <div className="flex justify-between items-start mb-4 shrink-0">
+                <div>
+                  <h3 className="text-xl font-bold">{viewingExercise.name}</h3>
+                  <p className="text-xs font-medium opacity-50 uppercase tracking-widest mt-1">{viewingExercise.category} • {viewingExercise.target}</p>
+                </div>
+                <button 
+                  onClick={() => setViewingExercise(null)} 
+                  className={`p-2 rounded-full ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/10'}`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto flex-1 space-y-6 pr-2">
+                <div>
+                  <h4 className="text-sm font-bold uppercase opacity-40 mb-2">How To</h4>
+                  <ol className="list-decimal list-inside space-y-2 opacity-80 text-sm">
+                    {viewingExercise.howTo.map((step, i) => <li key={i}>{step}</li>)}
+                  </ol>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-green-500/10' : 'bg-green-500/20'}`}>
+                    <h4 className="text-sm font-bold text-green-600 dark:text-green-400 mb-2">Do's</h4>
+                    <ul className="list-disc list-inside space-y-1 opacity-80 text-xs">
+                      {viewingExercise.dos.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                  </div>
+                  <div className={`p-4 rounded-2xl ${data.theme === 'light' ? 'bg-red-500/10' : 'bg-red-500/20'}`}>
+                    <h4 className="text-sm font-bold text-red-600 dark:text-red-400 mb-2">Don'ts</h4>
+                    <ul className="list-disc list-inside space-y-1 opacity-80 text-xs">
+                      {viewingExercise.donts.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Navigation */}
       <nav className={`fixed bottom-6 left-1/2 -translate-x-1/2 ${theme.accent} ${theme.accentText} rounded-full px-2 py-2 flex items-center gap-2 shadow-xl z-40`}>
         <button 
@@ -1286,6 +1733,15 @@ export default function App() {
         >
           <Target className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'goals' && <span className="text-sm font-medium">Goals</span>}
+        </button>
+        <button 
+          onClick={() => setActiveTab('workouts')}
+          aria-label="Workouts View"
+          aria-current={activeTab === 'workouts' ? 'page' : undefined}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${activeTab === 'workouts' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+        >
+          <Dumbbell className="w-5 h-5" aria-hidden="true" />
+          {activeTab === 'workouts' && <span className="text-sm font-medium">Workouts</span>}
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
