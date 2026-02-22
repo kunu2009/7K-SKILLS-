@@ -155,6 +155,13 @@ type Goal = {
   completed: boolean;
 };
 
+type Todo = {
+  id: string;
+  text: string;
+  completed: boolean;
+  date: string; // YYYY-MM-DD
+};
+
 type AppData = {
   stacks: Stack[];
   history: Record<string, string[]>; // date -> array of completed habit ids
@@ -168,6 +175,7 @@ type AppData = {
   goals: Goal[];
   customTemplates: WorkoutTemplate[];
   workoutLogs: Record<string, WorkoutLog[]>;
+  todos: Todo[];
 };
 
 export default function App() {
@@ -202,6 +210,7 @@ export default function App() {
         if (!parsed.goals) parsed.goals = [];
         if (!parsed.customTemplates) parsed.customTemplates = [];
         if (!parsed.workoutLogs) parsed.workoutLogs = {};
+        if (!parsed.todos) parsed.todos = [];
         return parsed;
       } catch (e) {
         // fallback
@@ -220,7 +229,8 @@ export default function App() {
       theme: 'light',
       goals: [],
       customTemplates: [],
-      workoutLogs: {}
+      workoutLogs: {},
+      todos: []
     };
   });
 
@@ -891,7 +901,17 @@ export default function App() {
                           </div>
                           
                           <div className="shrink-0 opacity-20">
-                            <Icon className="w-5 h-5" />
+                            {habit.title.toLowerCase().includes('study session') ? (
+                              <button 
+                                onClick={() => setShowStudyIframe(true)}
+                                className="hover:opacity-100 hover:scale-110 transition-all cursor-pointer"
+                                title="Open Study Session"
+                              >
+                                <Icon className="w-5 h-5" />
+                              </button>
+                            ) : (
+                              <Icon className="w-5 h-5" />
+                            )}
                           </div>
                         </motion.div>
                       );
@@ -900,6 +920,57 @@ export default function App() {
                 </section>
                 );
               })}
+
+              {/* Todos Section */}
+              <div className="mt-8">
+                <h2 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
+                  <ListTodo className="w-6 h-6" />
+                  Daily Plan / Todos
+                </h2>
+                <div className={`${theme.card} p-5 rounded-3xl border ${theme.border} shadow-sm`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <input 
+                      type="text" 
+                      value={newTodoText}
+                      onChange={(e) => setNewTodoText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+                      placeholder={`Add a task for ${viewingDate === getTodayStr() ? 'today' : viewingDate}...`}
+                      className={`flex-1 p-3 rounded-xl outline-none focus:ring-2 ${data.theme === 'light' ? 'bg-black/5 focus:ring-black/10' : 'bg-white/10 focus:ring-white/10'}`}
+                    />
+                    <button 
+                      onClick={addTodo}
+                      disabled={!newTodoText.trim()}
+                      className={`p-3 rounded-xl transition-all disabled:opacity-50 ${theme.accent} ${theme.accentText}`}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {data.todos.filter(t => t.date === viewingDate).map(todo => (
+                      <div key={todo.id} className={`flex items-center gap-3 p-3 rounded-xl group ${data.theme === 'light' ? 'hover:bg-black/5' : 'hover:bg-white/5'}`}>
+                        <button 
+                          onClick={() => toggleTodo(todo.id)}
+                          className={`shrink-0 transition-colors duration-300 ${todo.completed ? 'opacity-50' : ''}`}
+                        >
+                          {todo.completed ? <CheckCircle2 className="w-6 h-6 text-green-500" /> : <Circle className="w-6 h-6" />}
+                        </button>
+                        <span className={`flex-1 font-medium ${todo.completed ? 'line-through opacity-50' : ''}`}>{todo.text}</span>
+                        <button 
+                          onClick={() => deleteTodo(todo.id)}
+                          className="p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {data.todos.filter(t => t.date === viewingDate).length === 0 && (
+                      <p className="text-sm opacity-50 text-center py-4">No tasks planned for this day.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
             </motion.div>
           ) : activeTab === 'history' ? (
             <motion.div 
@@ -1701,6 +1772,30 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Study Iframe Modal */}
+      <AnimatePresence>
+        {showStudyIframe && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] flex flex-col">
+            <div className="flex justify-end p-4">
+              <button 
+                onClick={() => setShowStudyIframe(false)} 
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 w-full h-full bg-white">
+              <iframe 
+                src="https://www.12th.7kc.me" 
+                className="w-full h-full border-0"
+                title="Study Session"
+                allow="fullscreen"
+              />
+            </div>
           </div>
         )}
       </AnimatePresence>

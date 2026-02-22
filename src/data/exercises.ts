@@ -165,5 +165,102 @@ export const EXERCISE_DB: ExerciseDef[] = [
     ],
     dos: ['Keep lower back flat on the floor', 'Point toes', 'Squeeze abs hard'],
     donts: ["Don't let your lower back arch off the floor", "Don't hold your breath"]
+  },
+  {
+    id: 'navy_seal_pushup',
+    name: 'Navy Seal Push-Up',
+    category: 'Upper Body',
+    target: 'Chest, Shoulders, Triceps, Core',
+    howTo: [
+      'Start in a standard push-up position.',
+      'Lower your body until your chest touches the floor.',
+      'Push back up, then bring one knee to the same side elbow (Spider-Man style).',
+      'Return the leg, do another push-up, and bring the other knee to the elbow.'
+    ],
+    dos: ['Keep core tight', 'Full range of motion', 'Control the knee drive'],
+    donts: ["Don't let hips sag", "Don't rush the movement"]
+  },
+  {
+    id: 'handstand_wall',
+    name: 'Wall Handstand Hold',
+    category: 'Calisthenics',
+    target: 'Shoulders, Core, Balance',
+    howTo: [
+      'Place your hands on the floor about a foot away from a wall.',
+      'Kick your legs up so your heels rest against the wall.',
+      'Push the floor away actively, locking your elbows.',
+      'Hold the position, keeping your body as straight as possible.'
+    ],
+    dos: ['Push tall through shoulders', 'Squeeze glutes and core', 'Look between your hands'],
+    donts: ["Don't bend your elbows", "Don't arch your lower back excessively"]
+  },
+  {
+    id: 'wrist_curls_towel',
+    name: 'Towel Wrist Curls',
+    category: 'Upper Body',
+    target: 'Forearms (Veiny & Bigger)',
+    howTo: [
+      'Roll up a thick towel tightly.',
+      'Grip the towel with both hands in front of you.',
+      'Twist the towel in opposite directions as hard as you can (like wringing out water).',
+      'Hold the maximum tension for a few seconds, then reverse the twist.'
+    ],
+    dos: ['Squeeze as hard as possible', 'Keep elbows slightly bent', 'Focus on the forearm contraction'],
+    donts: ["Don't use your shoulders to twist", "Don't hold your breath"]
+  },
+  {
+    id: 'fingertip_pushup',
+    name: 'Fingertip Push-Up Hold',
+    category: 'Upper Body',
+    target: 'Forearms, Finger Strength',
+    howTo: [
+      'Get into a push-up position but support your weight entirely on your fingertips.',
+      'Keep your fingers spread wide and slightly arched.',
+      'Hold this top position for time. If too hard, do it on your knees.'
+    ],
+    dos: ['Keep fingers slightly bent (spider grip)', 'Engage core'],
+    donts: ["Don't let your fingers collapse flat", "Don't drop your hips"]
+  },
+  {
+    id: 'side_plank_dips',
+    name: 'Side Plank Dips',
+    category: 'Core',
+    target: 'Obliques',
+    howTo: [
+      'Get into a side plank position on your forearm.',
+      'Lower your hips towards the floor until they almost touch.',
+      'Push your hips back up as high as you can, squeezing your obliques.',
+      'Repeat for reps, then switch sides.'
+    ],
+    dos: ['Keep your body in a straight line', 'Squeeze obliques at the top'],
+    donts: ["Don't let your chest rotate towards the floor", "Don't use momentum"]
+  },
+  {
+    id: 'russian_twists',
+    name: 'Russian Twists',
+    category: 'Core',
+    target: 'Obliques, Core',
+    howTo: [
+      'Sit on the floor with your knees bent and feet lifted slightly off the ground.',
+      'Lean back slightly to engage your core.',
+      'Clasp your hands together and twist your torso to the right, touching the floor.',
+      'Twist to the left and touch the floor. Repeat.'
+    ],
+    dos: ['Twist your shoulders, not just your arms', 'Keep your core braced'],
+    donts: ["Don't round your lower back", "Don't swing wildly"]
+  },
+  {
+    id: 'cheek_lifter',
+    name: 'Cheek Lifter',
+    category: 'Face',
+    target: 'Cheek Muscles (Higher Cheekbones)',
+    howTo: [
+      'Open your mouth to form an "O" shape, hiding your teeth with your lips.',
+      'Smile widely while keeping your teeth hidden.',
+      'Place your index fingers lightly on your cheek muscles.',
+      'Relax and repeat the smile, feeling the muscles lift under your fingers.'
+    ],
+    dos: ['Focus on the muscle contraction', 'Keep forehead relaxed'],
+    donts: ["Don't squint your eyes", "Don't create wrinkles around your mouth"]
   }
 ];
